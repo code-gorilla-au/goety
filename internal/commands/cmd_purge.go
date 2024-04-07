@@ -38,7 +38,7 @@ func purgeFunc(cmd *cobra.Command, args []string) {
 	log := logging.New(flagRootVerbose)
 	ctx := context.Background()
 
-	if err := parseFlags(); err != nil {
+	if err := parsePurgeFlag(); err != nil {
 		log.Error("error parsing flags", "error", err)
 		os.Exit(1)
 	}
@@ -68,8 +68,8 @@ func purgeFunc(cmd *cobra.Command, args []string) {
 
 }
 
-// parseFlags will validate the flags passed to the purge command
-func parseFlags() error {
+// parsePurgeFlag will validate the flags passed to the purge command
+func parsePurgeFlag() error {
 	if flagPurgeTableName == "" {
 		return errors.New("table name is required")
 	}
