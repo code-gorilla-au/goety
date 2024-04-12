@@ -20,6 +20,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&flagRootAwsRegion, "aws-region", "r", "ap-southeast-2", "aws region the table is located")
 
 	rootCmd.AddCommand(purgeCmd)
+	rootCmd.AddCommand(dumpCmd)
 }
 
 func Execute() error {

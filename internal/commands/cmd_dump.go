@@ -48,7 +48,8 @@ func dumpFunc(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	_ = goety.New(dbClient, log, flagRootDryRun)
+	g := goety.New(dbClient, log, flagRootDryRun)
+	g.Dump(ctx, flagDumpTableName)
 
 }
 
