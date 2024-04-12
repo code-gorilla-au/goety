@@ -101,7 +101,7 @@ func (s Service) Dump(ctx context.Context, tableName string) error {
 
 	s.logger.Debug(fmt.Sprintf("dumping %d items", len(items)))
 
-	for _, item := range items {
+	for _, item := range results {
 		s.logger.Debug(fmt.Sprintf("dumping item: %s", item))
 	}
 

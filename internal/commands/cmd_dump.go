@@ -12,10 +12,8 @@ import (
 )
 
 var (
-	flagDumpTableName    string
-	flagDumpEndpoint     string
-	flagDumpPartitionKey string
-	flagDumpSortKey      string
+	flagDumpTableName string
+	flagDumpEndpoint  string
 )
 
 var dumpCmd = &cobra.Command{
@@ -28,8 +26,6 @@ var dumpCmd = &cobra.Command{
 func init() {
 	dumpCmd.Flags().StringVarP(&flagDumpTableName, "table", "t", "", "table name")
 	dumpCmd.Flags().StringVarP(&flagDumpEndpoint, "endpoint", "e", "", "DynamoDB endpoint to connect to, if none is provide it will use the default aws endpoint")
-	dumpCmd.Flags().StringVarP(&flagDumpPartitionKey, "partition-key", "p", "pk", "The name of the partition key")
-	dumpCmd.Flags().StringVarP(&flagDumpSortKey, "sort-key", "s", "sk", "The name of the sort key")
 }
 
 func dumpFunc(cmd *cobra.Command, args []string) {
@@ -42,7 +38,7 @@ func dumpFunc(cmd *cobra.Command, args []string) {
 	}
 
 	log.Debug("loading dynamodb client")
-	dbClient, err := dynamodb.NewClient(ctx, flagRootAwsRegion, flagPurgeEndpoint)
+	dbClient, err := dynamodb.NewClient(ctx, flagRootAwsRegion, flagDumpEndpoint)
 	if err != nil {
 		log.Error("could not load client")
 		os.Exit(1)
@@ -57,9 +53,6 @@ func dumpFunc(cmd *cobra.Command, args []string) {
 func parseDumpFlag() error {
 	if flagDumpTableName == "" {
 		return errors.New("table name is required")
-	}
-	if flagDumpPartitionKey == "" {
-		return errors.New("partition key is required")
 	}
 	return nil
 }
