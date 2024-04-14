@@ -75,6 +75,7 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 	return nil
 }
 
+// Dump all items from the given table
 func (s Service) Dump(ctx context.Context, tableName string) error {
 	s.logger.Debug("running dump")
 
