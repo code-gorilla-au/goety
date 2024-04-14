@@ -17,7 +17,7 @@ var (
 )
 
 var dumpCmd = &cobra.Command{
-	Use:   "dump -t [TABLE_NAME] -p [PARTITION_KEY] -s [SORT_KEY]",
+	Use:   "dump -t [TABLE_NAME]",
 	Short: "dump the contents of a dynamodb to a file",
 	Long:  "dump will scan all items within a dynamodb table and write the contents to a file",
 	Run:   dumpFunc,
