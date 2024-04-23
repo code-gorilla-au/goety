@@ -15,9 +15,10 @@ const (
 
 func New(client DynamoClient, logger *slog.Logger, dryRun bool) Service {
 	return Service{
-		client: client,
-		dryRun: dryRun,
-		logger: logger,
+		client:     client,
+		dryRun:     dryRun,
+		logger:     logger,
+		fileWriter: &WriteFile{},
 	}
 }
 
@@ -71,6 +72,39 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 	}
 
 	s.logger.Debug(fmt.Sprintf("purge complete, deleted: %d", deleted))
+	return nil
+}
+
+// Dump all items from the given table
+func (s Service) Dump(ctx context.Context, tableName string, path string) error {
+	s.logger.Debug("running dump")
+
+	items, err := s.client.ScanAll(ctx, &dynamodb.ScanInput{
+		TableName: &tableName,
+	})
+	if err != nil {
+		s.logger.Error("could not scan table", "error", err)
+		return err
+	}
+
+	if s.dryRun {
+		s.logger.Debug("dry run enabled")
+		prettyPrint(items)
+		return nil
+	}
+
+	s.logger.Debug("saving to file", "filePath", path)
+	data, err := json.Marshal(items)
+	if err != nil {
+		s.logger.Error("could not marshal items", "error", err)
+		return err
+	}
+
+	if err := s.fileWriter.WriteFile(path, data, 0644); err != nil {
+		s.logger.Error("could not write file", "error", err)
+		return err
+	}
+
 	return nil
 }
 

@@ -18,8 +18,11 @@
 # vendor/
 
 goety
+!internal/goety
 
 tmp
 
 # Go workspace file
 go.work
+
+.env.local

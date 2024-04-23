@@ -13,3 +13,7 @@ test-unit: ## Run unit tests
 test-cover: ## generate html coverage report + open
 	go tool cover -html=$(COVER_OUTPUT_RAW) -o $(COVER_OUTPUT_HTML)
 	open coverage.html
+
+
+test-integration: build ## Run integration tests
+	./goety dump -e http://localhost:8000 -t "dev-main-adjacent" -p "./test.json"
