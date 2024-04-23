@@ -18,6 +18,7 @@
 # vendor/
 
 goety
+!internal/goety
 
 tmp
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 )
 
@@ -16,9 +15,10 @@ const (
 
 func New(client DynamoClient, logger *slog.Logger, dryRun bool) Service {
 	return Service{
-		client: client,
-		dryRun: dryRun,
-		logger: logger,
+		client:     client,
+		dryRun:     dryRun,
+		logger:     logger,
+		fileWriter: &WriteFile{},
 	}
 }
 
@@ -76,7 +76,7 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 }
 
 // Dump all items from the given table
-func (s Service) Dump(ctx context.Context, tableName string) error {
+func (s Service) Dump(ctx context.Context, tableName string, path string) error {
 	s.logger.Debug("running dump")
 
 	items, err := s.client.ScanAll(ctx, &dynamodb.ScanInput{
@@ -93,17 +93,16 @@ func (s Service) Dump(ctx context.Context, tableName string) error {
 		return nil
 	}
 
-	results := []map[string]any{}
-
-	if err := attributevalue.UnmarshalListOfMaps(items, &results); err != nil {
-		s.logger.Error("could not unmarshal items", "error", err)
+	s.logger.Debug("saving to file", "filePath", path)
+	data, err := json.Marshal(items)
+	if err != nil {
+		s.logger.Error("could not marshal items", "error", err)
 		return err
 	}
 
-	s.logger.Debug(fmt.Sprintf("dumping %d items", len(items)))
-
-	for _, item := range results {
-		s.logger.Debug(fmt.Sprintf("dumping item: %s", item))
+	if err := s.fileWriter.WriteFile(path, data, 0644); err != nil {
+		s.logger.Error("could not write file", "error", err)
+		return err
 	}
 
 	return nil

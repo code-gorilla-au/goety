@@ -16,4 +16,4 @@ test-cover: ## generate html coverage report + open
 
 
 test-integration: build ## Run integration tests
-	./goety dump -e http://localhost:8000 -t "dev-main-adjacent" -d
+	./goety dump -e http://localhost:8000 -t "dev-main-adjacent" -p "./test.json"

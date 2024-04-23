@@ -14,6 +14,7 @@ import (
 var (
 	flagDumpTableName string
 	flagDumpEndpoint  string
+	flagDumpFilePath  string
 )
 
 var dumpCmd = &cobra.Command{
@@ -26,6 +27,7 @@ var dumpCmd = &cobra.Command{
 func init() {
 	dumpCmd.Flags().StringVarP(&flagDumpTableName, "table", "t", "", "table name")
 	dumpCmd.Flags().StringVarP(&flagDumpEndpoint, "endpoint", "e", "", "DynamoDB endpoint to connect to, if none is provide it will use the default aws endpoint")
+	dumpCmd.Flags().StringVarP(&flagDumpFilePath, "path", "p", "", "file path to save the json output")
 }
 
 func dumpFunc(cmd *cobra.Command, args []string) {
@@ -45,7 +47,7 @@ func dumpFunc(cmd *cobra.Command, args []string) {
 	}
 
 	g := goety.New(dbClient, log, flagRootDryRun)
-	_ = g.Dump(ctx, flagDumpTableName)
+	_ = g.Dump(ctx, flagDumpTableName, flagDumpFilePath)
 
 }
 
@@ -53,6 +55,9 @@ func dumpFunc(cmd *cobra.Command, args []string) {
 func parseDumpFlag() error {
 	if flagDumpTableName == "" {
 		return errors.New("table name is required")
+	}
+	if flagDumpFilePath == "" {
+		return errors.New("file path is required")
 	}
 	return nil
 }
