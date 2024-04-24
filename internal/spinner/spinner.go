@@ -60,7 +60,9 @@ func (s *Spinner) draw(frameDuration time.Duration) {
 
 	msg, err := s.emitter.GetMessage()
 	if err == nil {
+		s.mx.Lock()
 		s.message = msg
+		s.mx.Unlock()
 	}
 
 	for _, frame := range s.sprite {
@@ -88,10 +90,7 @@ func (s *Spinner) tick(invokeFn func()) {
 
 // UpdateMessage updates the spinner message
 func (s *Spinner) UpdateMessage(msg string) {
-	s.mx.Lock()
-	defer s.mx.Unlock()
 	s.emitter.Publish(msg)
-
 }
 
 // clearLine clears the current terminal line

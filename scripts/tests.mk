@@ -18,4 +18,4 @@ test-purge: build ## Run purge integration tests
 	./goety purge -e http://localhost:8000 -t "dev-main-adjacent" -p "inventoryId" -s "relationshipId"
 
 test-dump: build ## Run dump integration tests
-	./goety purge -e http://localhost:8000 -t "dev-main-adjacent" -p "test.json"
+	./goety dump -e http://localhost:8000 -t "dev-main-adjacent" -p "test.json"
