@@ -23,6 +23,7 @@ Usage:
 
 Available Commands:
   completion  Generate the autocompletion script for the specified shell
+  dump        dump the contents of a dynamodb to a file
   help        Help about any command
   purge       purge a dynamodb table of all items
 
@@ -36,6 +37,8 @@ Use "goety [command] --help" for more information about a command.
 
 ```
 
+## Purge
+
 ```bash
 goety purge -h
 
@@ -48,6 +51,26 @@ Flags:
   -p, --partition-key string   The name of the partition key (default "pk")
   -s, --sort-key string        The name of the sort key (default "sk")
   -t, --table string           table name
+
+Global Flags:
+  -r, --aws-region string   aws region the table is located (default "ap-southeast-2")
+  -d, --dry-run             dry run does not perform actions, only logs them
+  -v, --verbose             add verbose logging
+```
+
+## Dump
+
+```bash
+dump will scan all items within a dynamodb table and write the contents to a file
+
+Usage:
+  goety dump -t [TABLE_NAME] [flags]
+
+Flags:
+  -e, --endpoint string   DynamoDB endpoint to connect to, if none is provide it will use the default aws endpoint
+  -h, --help              help for dump
+  -p, --path string       file path to save the json output
+  -t, --table string      table name
 
 Global Flags:
   -r, --aws-region string   aws region the table is located (default "ap-southeast-2")
