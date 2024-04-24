@@ -2,10 +2,12 @@ package emitter
 
 import "fmt"
 
+// Message event emitter struct
 type Message struct {
 	messages chan string
 }
 
+// New creates a new message emitter
 func New() *Message {
 	return &Message{
 		messages: make(chan string, 1),

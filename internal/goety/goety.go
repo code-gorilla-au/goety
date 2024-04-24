@@ -82,7 +82,6 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 
 // Dump all items from the given table
 func (s Service) Dump(ctx context.Context, tableName string, path string) error {
-	s.logger.Debug("running dump")
 	s.emitter.Publish("dumping table")
 
 	items, err := s.client.ScanAll(ctx, &dynamodb.ScanInput{
@@ -93,13 +92,15 @@ func (s Service) Dump(ctx context.Context, tableName string, path string) error 
 		return err
 	}
 
+	s.emitter.Publish(fmt.Sprintf("scanned %d items", len(items)))
+
 	if s.dryRun {
 		s.logger.Debug("dry run enabled")
 		prettyPrint(items)
 		return nil
 	}
 
-	s.emitter.Publish("saving to file")
+	s.emitter.Publish(fmt.Sprintf("saving %d items to file %s", len(items), path))
 	s.logger.Debug("saving to file", "filePath", path)
 	data, err := json.Marshal(items)
 	if err != nil {
