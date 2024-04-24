@@ -12,6 +12,12 @@ import (
 	"github.com/code-gorilla-au/odize"
 )
 
+type mockEmitter struct {
+	publishFunc func(message string)
+}
+
+func (m *mockEmitter) Publish(message string) {}
+
 func TestService_Purge(t *testing.T) {
 	var client DynamoClientMock
 	var service Service
@@ -45,6 +51,9 @@ func TestService_Purge(t *testing.T) {
 			client: &client,
 			dryRun: false,
 			logger: logger,
+			emitter: &mockEmitter{
+				publishFunc: func(message string) {},
+			},
 		}
 	})
 
@@ -140,6 +149,9 @@ func TestService_Dump(t *testing.T) {
 			dryRun:     false,
 			logger:     logger,
 			fileWriter: &fileWriter,
+			emitter: &mockEmitter{
+				publishFunc: func(message string) {},
+			},
 		}
 	})
 

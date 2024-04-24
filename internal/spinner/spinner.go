@@ -17,11 +17,11 @@ type Spinner struct {
 	message       string
 	closer        chan struct{}
 	cleanUp       sync.Once
-	emitter       emitter.MessagePublisher
+	emitter       emitter.MessageGetPublishCloser
 }
 
 // New creates a new spinner
-func New(emitter emitter.MessagePublisher) *Spinner {
+func New(emitter emitter.MessageGetPublishCloser) *Spinner {
 	return &Spinner{
 		sprite:        brailleDots,
 		mx:            sync.Mutex{},
