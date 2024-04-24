@@ -7,18 +7,20 @@ import (
 	"log/slog"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/code-gorilla-au/goety/internal/emitter"
 )
 
 const (
 	defaultBatchSize = 25
 )
 
-func New(client DynamoClient, logger *slog.Logger, dryRun bool) Service {
+func New(client DynamoClient, logger *slog.Logger, emitter emitter.MessagePublisher, dryRun bool) Service {
 	return Service{
 		client:     client,
 		dryRun:     dryRun,
 		logger:     logger,
 		fileWriter: &WriteFile{},
+		emitter:    emitter,
 	}
 }
 
@@ -39,7 +41,7 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 		return err
 	}
 
-	s.emitter.Publish("")
+	s.emitter.Publish("items scanned, beginning purge")
 
 	if s.dryRun {
 		s.logger.Debug("dry run enabled")
@@ -73,6 +75,7 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 		end += defaultBatchSize
 	}
 
+	s.emitter.Publish("purge complete")
 	s.logger.Debug(fmt.Sprintf("purge complete, deleted: %d", deleted))
 	return nil
 }
@@ -80,6 +83,7 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 // Dump all items from the given table
 func (s Service) Dump(ctx context.Context, tableName string, path string) error {
 	s.logger.Debug("running dump")
+	s.emitter.Publish("dumping table")
 
 	items, err := s.client.ScanAll(ctx, &dynamodb.ScanInput{
 		TableName: &tableName,
@@ -95,6 +99,7 @@ func (s Service) Dump(ctx context.Context, tableName string, path string) error 
 		return nil
 	}
 
+	s.emitter.Publish("saving to file")
 	s.logger.Debug("saving to file", "filePath", path)
 	data, err := json.Marshal(items)
 	if err != nil {
@@ -107,6 +112,7 @@ func (s Service) Dump(ctx context.Context, tableName string, path string) error 
 		return err
 	}
 
+	s.emitter.Publish("dump complete")
 	return nil
 }
 

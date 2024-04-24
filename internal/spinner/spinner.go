@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/code-gorilla-au/goety/internal/emitter"
 )
 
 const defaultFrameDuration = 150 * time.Millisecond
@@ -15,14 +17,16 @@ type Spinner struct {
 	message       string
 	closer        chan struct{}
 	cleanUp       sync.Once
+	emitter       emitter.MessagePublisher
 }
 
-func New() *Spinner {
+func New(emitter emitter.MessagePublisher) *Spinner {
 	return &Spinner{
 		sprite:        brailleDots,
 		mx:            sync.Mutex{},
 		closer:        make(chan struct{}, 1),
 		frameDuration: defaultFrameDuration,
+		emitter:       emitter,
 	}
 }
 
@@ -39,6 +43,7 @@ func (s *Spinner) Start(msg string) {
 func (s *Spinner) Stop(message string) {
 	s.cleanUp.Do(func() {
 		close(s.closer)
+		s.emitter.Close()
 		clearLine()
 
 		if message != "" {
@@ -50,6 +55,11 @@ func (s *Spinner) Stop(message string) {
 // draw the spinner
 func (s *Spinner) draw(frameDuration time.Duration) {
 	output := ""
+
+	msg, err := s.emitter.GetMessage()
+	if err == nil {
+		s.message = msg
+	}
 
 	for _, frame := range s.sprite {
 
@@ -77,8 +87,8 @@ func (s *Spinner) tick(invokeFn func()) {
 func (s *Spinner) UpdateMessage(msg string) {
 	s.mx.Lock()
 	defer s.mx.Unlock()
+	s.emitter.Publish(msg)
 
-	s.message = msg
 }
 
 // clearLine clears the current terminal line

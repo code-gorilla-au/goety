@@ -6,8 +6,10 @@ import (
 	"os"
 
 	"github.com/code-gorilla-au/goety/internal/dynamodb"
+	"github.com/code-gorilla-au/goety/internal/emitter"
 	"github.com/code-gorilla-au/goety/internal/goety"
 	"github.com/code-gorilla-au/goety/internal/logging"
+	"github.com/code-gorilla-au/goety/internal/spinner"
 	"github.com/spf13/cobra"
 )
 
@@ -46,7 +48,15 @@ func dumpFunc(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	g := goety.New(dbClient, log, flagRootDryRun)
+	msgEmitter := emitter.New()
+
+	g := goety.New(dbClient, log, msgEmitter, flagRootDryRun)
+
+	if !flagRootVerbose {
+		spin := spinner.New(msgEmitter)
+		spin.Start("starting dump")
+		defer spin.Stop("dump complete")
+	}
 	_ = g.Dump(ctx, flagDumpTableName, flagDumpFilePath)
 
 }
