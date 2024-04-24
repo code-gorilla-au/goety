@@ -15,5 +15,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Release
         uses: codfish/semantic-release-action@v3.0.0
+        with:
+          plugins: |
+            [ '@semantic-release/github' ]
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
