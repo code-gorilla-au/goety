@@ -58,7 +58,7 @@ func purgeFunc(cmd *cobra.Command, args []string) {
 	if !flagRootVerbose {
 		spin := spinner.New(msgEmitter)
 		spin.Start("starting purge")
-		defer spin.Stop("purge complete")
+		defer spin.Stop("")
 	}
 
 	if err = goetyService.Purge(ctx, flagPurgeTableName, goety.TableKeys{
