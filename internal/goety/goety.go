@@ -39,6 +39,8 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 		return err
 	}
 
+	s.emitter.Publish("")
+
 	if s.dryRun {
 		s.logger.Debug("dry run enabled")
 		prettyPrint(items)

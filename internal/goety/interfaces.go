@@ -20,3 +20,7 @@ var _ DynamoClient = (*ddb.Client)(nil)
 type fileWriter interface {
 	WriteFile(name string, data []byte, perm fs.FileMode) error
 }
+
+type Emitter interface {
+	Publish(msg string)
+}
