@@ -20,6 +20,7 @@ type Spinner struct {
 	emitter       emitter.MessagePublisher
 }
 
+// New creates a new spinner
 func New(emitter emitter.MessagePublisher) *Spinner {
 	return &Spinner{
 		sprite:        brailleDots,
@@ -30,6 +31,7 @@ func New(emitter emitter.MessagePublisher) *Spinner {
 	}
 }
 
+// Start the spinner with optional message
 func (s *Spinner) Start(msg string) {
 	s.UpdateMessage(msg)
 
@@ -71,6 +73,7 @@ func (s *Spinner) draw(frameDuration time.Duration) {
 	}
 }
 
+// tick is the lifecycle of the spinner. It runs until we receive a signal to stop.
 func (s *Spinner) tick(invokeFn func()) {
 	for { // run until we receive a signal to stop
 		select {

@@ -78,6 +78,10 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 }
 
 // Dump all items from the given table
+//
+// Example:
+//
+//	Dump(ctx, "my-table", "path/to/file.json")
 func (s Service) Dump(ctx context.Context, tableName string, path string) error {
 	s.emitter.Publish(fmt.Sprintf("dumping table %s to file %s", tableName, path))
 
