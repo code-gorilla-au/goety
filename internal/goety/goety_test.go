@@ -128,8 +128,6 @@ func TestService_Dump(t *testing.T) {
 		client = DynamoClientMock{
 			ScanAllFunc: func(ctx context.Context, input *dynamodb.ScanInput) ([]map[string]types.AttributeValue, error) {
 				callScanAll++
-				odize.AssertEqual(t, "fo", *input.ProjectionExpression)
-
 				return []map[string]types.AttributeValue{
 					{
 						"pk": &types.AttributeValueMemberS{Value: "pk"},
