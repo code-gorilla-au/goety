@@ -128,6 +128,8 @@ func TestService_Dump(t *testing.T) {
 		client = DynamoClientMock{
 			ScanAllFunc: func(ctx context.Context, input *dynamodb.ScanInput) ([]map[string]types.AttributeValue, error) {
 				callScanAll++
+				odize.AssertEqual(t, "fo", *input.ProjectionExpression)
+
 				return []map[string]types.AttributeValue{
 					{
 						"pk": &types.AttributeValueMemberS{Value: "pk"},
@@ -193,6 +195,23 @@ func TestService_Dump(t *testing.T) {
 
 			err := service.Dump(ctx, "my-table", "path")
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
+		}).
+		Test("should dump items with attributes", func(t *testing.T) {
+			attrExp := []string{"attr1", "attr2"}
+
+			client.ScanAllFunc = func(ctx context.Context, input *dynamodb.ScanInput) ([]map[string]types.AttributeValue, error) {
+				odize.AssertEqual(t, "attr1, attr2", *input.ProjectionExpression)
+
+				return []map[string]types.AttributeValue{
+					{
+						"pk": &types.AttributeValueMemberS{Value: "pk"},
+						"sk": &types.AttributeValueMemberS{Value: "sk"},
+					},
+				}, nil
+			}
+
+			err := service.Dump(ctx, "my-table", "path", attrExp...)
+			odize.AssertNoError(t, err)
 		}).
 		Run()
 

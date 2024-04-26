@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/code-gorilla-au/goety/internal/emitter"
 )
@@ -77,16 +79,23 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 	return nil
 }
 
-// Dump all items from the given table
+// Dump all items from the given table. Optionally specify a list of attributes to extract.
 //
 // Example:
 //
-//	Dump(ctx, "my-table", "path/to/file.json")
-func (s Service) Dump(ctx context.Context, tableName string, path string) error {
+//	Dump(ctx, "my-table", "path/to/file.json", []string{"attr1", "attr2"})
+func (s Service) Dump(ctx context.Context, tableName string, path string, attrs ...string) error {
 	s.emitter.Publish(fmt.Sprintf("dumping table %s to file %s", tableName, path))
 
+	var projExp *string
+
+	if len(attrs) > 0 {
+		projExp = aws.String(strings.Join(attrs, ", "))
+	}
+
 	items, err := s.client.ScanAll(ctx, &dynamodb.ScanInput{
-		TableName: &tableName,
+		TableName:            &tableName,
+		ProjectionExpression: projExp,
 	})
 	if err != nil {
 		s.logger.Error("could not scan table", "error", err)

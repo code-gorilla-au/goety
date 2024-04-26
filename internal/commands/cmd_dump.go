@@ -14,9 +14,10 @@ import (
 )
 
 var (
-	flagDumpTableName string
-	flagDumpEndpoint  string
-	flagDumpFilePath  string
+	flagDumpTableName    string
+	flagDumpEndpoint     string
+	flagDumpFilePath     string
+	flagDumpExtractAttrs []string
 )
 
 var dumpCmd = &cobra.Command{
@@ -30,6 +31,7 @@ func init() {
 	dumpCmd.Flags().StringVarP(&flagDumpTableName, "table", "t", "", "table name")
 	dumpCmd.Flags().StringVarP(&flagDumpEndpoint, "endpoint", "e", "", "DynamoDB endpoint to connect to, if none is provide it will use the default aws endpoint")
 	dumpCmd.Flags().StringVarP(&flagDumpFilePath, "path", "p", "", "file path to save the json output")
+	dumpCmd.Flags().StringSliceVarP(&flagDumpExtractAttrs, "attributes", "a", []string{}, "Optionally specify a list of attributes to extract from the table")
 }
 
 func dumpFunc(cmd *cobra.Command, args []string) {
@@ -57,7 +59,7 @@ func dumpFunc(cmd *cobra.Command, args []string) {
 		spin.Start("starting dump")
 		defer spin.Stop("dump complete")
 	}
-	_ = g.Dump(ctx, flagDumpTableName, flagDumpFilePath)
+	_ = g.Dump(ctx, flagDumpTableName, flagDumpFilePath, flagDumpExtractAttrs...)
 
 }
 
