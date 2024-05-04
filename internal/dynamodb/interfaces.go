@@ -6,12 +6,12 @@ import (
 	ddb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 )
 
-type ddbScanner interface {
-	Scan(ctx context.Context, params *ddb.ScanInput, optFns ...func(*ddb.Options)) (*ddb.ScanOutput, error)
+type Scanner interface {
+	Scan(ctx context.Context, input *ddb.ScanInput) (*ddb.ScanOutput, error)
 }
 
 //go:generate moq -rm -stub -out mocks_test.go . ddbClient
 type ddbClient interface {
-	ddbScanner
+	Scan(ctx context.Context, params *ddb.ScanInput, optFns ...func(*ddb.Options)) (*ddb.ScanOutput, error)
 	BatchWriteItem(ctx context.Context, params *ddb.BatchWriteItemInput, optFns ...func(*ddb.Options)) (*ddb.BatchWriteItemOutput, error)
 }

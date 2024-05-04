@@ -7,7 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-func ScanIterator(ctx context.Context, scanner ddbScanner) func(input *ddb.ScanInput) (*ddb.ScanOutput, error, bool) {
+func ScanIterator(ctx context.Context, scanner Scanner) func(input *ddb.ScanInput) (*ddb.ScanOutput, error, bool) {
 	done := false
 	var lastEvaluatedKey map[string]types.AttributeValue
 
