@@ -59,9 +59,9 @@ func (c *Client) ScanAll(ctx context.Context, input *ddb.ScanInput) ([]map[strin
 
 	done := false
 
-	for !done {
+	next := ScanIterator(ctx, c)
 
-		next := ScanIterator(ctx, c)
+	for !done {
 
 		var output *ddb.ScanOutput
 		var err error
