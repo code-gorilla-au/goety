@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	ddb "github.com/code-gorilla-au/goety/internal/dynamodb"
 	"github.com/code-gorilla-au/goety/internal/emitter"
 )
 
@@ -93,34 +94,49 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, attrs 
 		projExp = aws.String(strings.Join(attrs, ", "))
 	}
 
-	items, err := s.client.ScanAll(ctx, &dynamodb.ScanInput{
-		TableName:            &tableName,
-		ProjectionExpression: projExp,
-	})
-	if err != nil {
-		s.logger.Error("could not scan table", "error", err)
-		return err
+	done := false
+	var err error
+	var output *dynamodb.ScanOutput
+	next := ddb.ScanIterator(ctx, s.client)
+
+	result := []dynamodb.ScanOutput{}
+
+	for !done {
+		output, err, done = next(&dynamodb.ScanInput{
+			TableName:            &tableName,
+			ProjectionExpression: projExp,
+		})
+		if err != nil {
+			s.logger.Error("could not scan table", "error", err)
+			return err
+		}
+
+		if output == nil {
+			break
+		}
+
+		result = append(result, *output)
 	}
 
-	s.emitter.Publish(fmt.Sprintf("scanned %d items", len(items)))
+	s.emitter.Publish(fmt.Sprintf("scanned %d items", len(result)))
 
 	if s.dryRun {
 		s.logger.Debug("dry run enabled")
-		prettyPrint(items)
+		prettyPrint(result)
 		return nil
 	}
 
-	message := fmt.Sprintf("saving %d items to file ", len(items)) + path
+	message := fmt.Sprintf("saving %d items to file ", len(result)) + path
 	s.emitter.Publish(message)
-	data, err := json.Marshal(items)
-	if err != nil {
-		s.logger.Error("could not marshal items", "error", err)
-		return err
+	data, marshalErr := json.Marshal(result)
+	if marshalErr != nil {
+		s.logger.Error("could not marshal items", "error", marshalErr)
+		return marshalErr
 	}
 
-	if err := s.fileWriter.WriteFile(path, data, 0644); err != nil {
-		s.logger.Error("could not write file", "error", err)
-		return err
+	if fileErr := s.fileWriter.WriteFile(path, data, 0644); fileErr != nil {
+		s.logger.Error("could not write file", "error", fileErr)
+		return fileErr
 	}
 
 	s.emitter.Publish("dump complete")
