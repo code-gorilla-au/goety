@@ -57,28 +57,27 @@ func (c *Client) Scan(ctx context.Context, input *ddb.ScanInput) (*ddb.ScanOutpu
 func (c *Client) ScanAll(ctx context.Context, input *ddb.ScanInput) ([]map[string]types.AttributeValue, error) {
 	results := []map[string]types.AttributeValue{}
 
-	var lastEvaluatedKey map[string]types.AttributeValue
+	done := false
 
-	for {
+	for !done {
 
-		c.logger.Debug(fmt.Sprintf("scanning with lastEvaluatedKey: %s", JSONStringify(lastEvaluatedKey)))
+		next := ScanIterator(ctx, c)
 
-		input.ExclusiveStartKey = lastEvaluatedKey
-		output, err := c.db.Scan(ctx, input)
+		var output *ddb.ScanOutput
+		var err error
+
+		output, err, done = next(input)
 		if err != nil {
 			c.logger.Error("could not scan table", "error", err)
 			return results, err
 		}
 
-		lastEvaluatedKey = output.LastEvaluatedKey
+		if output == nil {
+			break
+		}
 
 		c.logger.Debug(fmt.Sprintf("batch scan count: %d", len(output.Items)))
 		results = append(results, output.Items...)
-
-		if lastEvaluatedKey == nil {
-			c.logger.Debug("scan complete")
-			break
-		}
 	}
 
 	c.logger.Debug(fmt.Sprintf("total scan count: %d", len(results)))
