@@ -26,9 +26,6 @@ var _ DynamoClient = &DynamoClientMock{}
 //			ScanFunc: func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
 //				panic("mock out the Scan method")
 //			},
-//			ScanAllFunc: func(ctx context.Context, input *dynamodb.ScanInput) ([]map[string]types.AttributeValue, error) {
-//				panic("mock out the ScanAll method")
-//			},
 //		}
 //
 //		// use mockedDynamoClient in code that requires DynamoClient
@@ -41,9 +38,6 @@ type DynamoClientMock struct {
 
 	// ScanFunc mocks the Scan method.
 	ScanFunc func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error)
-
-	// ScanAllFunc mocks the ScanAll method.
-	ScanAllFunc func(ctx context.Context, input *dynamodb.ScanInput) ([]map[string]types.AttributeValue, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -63,17 +57,9 @@ type DynamoClientMock struct {
 			// Input is the input argument value.
 			Input *dynamodb.ScanInput
 		}
-		// ScanAll holds details about calls to the ScanAll method.
-		ScanAll []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Input is the input argument value.
-			Input *dynamodb.ScanInput
-		}
 	}
 	lockBatchDeleteItems sync.RWMutex
 	lockScan             sync.RWMutex
-	lockScanAll          sync.RWMutex
 }
 
 // BatchDeleteItems calls BatchDeleteItemsFunc.
@@ -157,45 +143,5 @@ func (mock *DynamoClientMock) ScanCalls() []struct {
 	mock.lockScan.RLock()
 	calls = mock.calls.Scan
 	mock.lockScan.RUnlock()
-	return calls
-}
-
-// ScanAll calls ScanAllFunc.
-func (mock *DynamoClientMock) ScanAll(ctx context.Context, input *dynamodb.ScanInput) ([]map[string]types.AttributeValue, error) {
-	callInfo := struct {
-		Ctx   context.Context
-		Input *dynamodb.ScanInput
-	}{
-		Ctx:   ctx,
-		Input: input,
-	}
-	mock.lockScanAll.Lock()
-	mock.calls.ScanAll = append(mock.calls.ScanAll, callInfo)
-	mock.lockScanAll.Unlock()
-	if mock.ScanAllFunc == nil {
-		var (
-			stringToAttributeValuesOut []map[string]types.AttributeValue
-			errOut                     error
-		)
-		return stringToAttributeValuesOut, errOut
-	}
-	return mock.ScanAllFunc(ctx, input)
-}
-
-// ScanAllCalls gets all the calls that were made to ScanAll.
-// Check the length with:
-//
-//	len(mockedDynamoClient.ScanAllCalls())
-func (mock *DynamoClientMock) ScanAllCalls() []struct {
-	Ctx   context.Context
-	Input *dynamodb.ScanInput
-} {
-	var calls []struct {
-		Ctx   context.Context
-		Input *dynamodb.ScanInput
-	}
-	mock.lockScanAll.RLock()
-	calls = mock.calls.ScanAll
-	mock.lockScanAll.RUnlock()
 	return calls
 }

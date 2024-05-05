@@ -2,7 +2,6 @@ package dynamodb
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	ddb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -54,36 +53,6 @@ func (c *Client) Scan(ctx context.Context, input *ddb.ScanInput) (*ddb.ScanOutpu
 	return output, nil
 }
 
-func (c *Client) ScanAll(ctx context.Context, input *ddb.ScanInput) ([]map[string]types.AttributeValue, error) {
-	results := []map[string]types.AttributeValue{}
-
-	done := false
-
-	next := ScanIterator(ctx, c)
-
-	for !done {
-
-		var output *ddb.ScanOutput
-		var err error
-
-		output, err, done = next(input)
-		if err != nil {
-			c.logger.Error("could not scan table", "error", err)
-			return results, err
-		}
-
-		if output == nil {
-			break
-		}
-
-		c.logger.Debug(fmt.Sprintf("batch scan count: %d", len(output.Items)))
-		results = append(results, output.Items...)
-	}
-
-	c.logger.Debug(fmt.Sprintf("total scan count: %d", len(results)))
-	return results, nil
-
-}
 
 // BatchDeleteItems - deletes items in a batch Note, max size is 25 items within a batch
 func (c *Client) BatchDeleteItems(ctx context.Context, tableName string, keys []map[string]types.AttributeValue) (*ddb.BatchWriteItemOutput, error) {

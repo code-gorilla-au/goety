@@ -33,13 +33,15 @@ func TestService_Purge(t *testing.T) {
 	group.BeforeEach(func() {
 
 		client = DynamoClientMock{
-			ScanAllFunc: func(ctx context.Context, input *dynamodb.ScanInput) ([]map[string]types.AttributeValue, error) {
+			ScanFunc: func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
 				callScanAll++
-				return []map[string]types.AttributeValue{
-					{
-						"pk": &types.AttributeValueMemberS{Value: "pk"},
-						"sk": &types.AttributeValueMemberS{Value: "sk"},
-					},
+				return &dynamodb.ScanOutput{
+					Items: []map[string]types.AttributeValue{
+						{
+							"pk": &types.AttributeValueMemberS{Value: "pk"},
+							"sk": &types.AttributeValueMemberS{Value: "sk"},
+						},
+					}, 
 				}, nil
 			},
 			BatchDeleteItemsFunc: func(ctx context.Context, tableName string, keys []map[string]types.AttributeValue) (*dynamodb.BatchWriteItemOutput, error) {
@@ -82,7 +84,7 @@ func TestService_Purge(t *testing.T) {
 		}).
 		Test("should return error if scan fails", func(t *testing.T) {
 			expectedErr := errors.New("scan all error")
-			client.ScanAllFunc = func(ctx context.Context, input *dynamodb.ScanInput) ([]map[string]types.AttributeValue, error) {
+			client.ScanFunc = func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
 				return nil, expectedErr
 			}
 
@@ -201,15 +203,18 @@ func TestService_Dump(t *testing.T) {
 		Test("should dump items with attributes", func(t *testing.T) {
 			attrExp := []string{"attr1", "attr2"}
 
-			client.ScanAllFunc = func(ctx context.Context, input *dynamodb.ScanInput) ([]map[string]types.AttributeValue, error) {
+			client.ScanFunc = func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
 				odize.AssertEqual(t, "attr1, attr2", *input.ProjectionExpression)
 
-				return []map[string]types.AttributeValue{
-					{
-						"pk": &types.AttributeValueMemberS{Value: "pk"},
-						"sk": &types.AttributeValueMemberS{Value: "sk"},
+				return &dynamodb.ScanOutput{
+					Items: []map[string]types.AttributeValue{
+						{
+							"pk": &types.AttributeValueMemberS{Value: "pk"},
+							"sk": &types.AttributeValueMemberS{Value: "sk"},
+						},
 					},
 				}, nil
+		
 			}
 
 			err := service.Dump(ctx, "my-table", "path", attrExp...)

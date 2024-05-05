@@ -35,45 +35,43 @@ func New(client DynamoClient, logger *slog.Logger, emitter emitter.MessagePublis
 func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) error {
 	s.emitter.Publish(fmt.Sprintf("scanning table %s for items to purge", tableName))
 
-	items, err := s.client.ScanAll(ctx, &dynamodb.ScanInput{
-		TableName:       &tableName,
-		AttributesToGet: []string{keys.PartitionKey, keys.SortKey},
-	})
-	if err != nil {
-		s.logger.Error("could not scan table", "error", err)
-		return err
-	}
+	done := false
+	var err error
+	var out *dynamodb.ScanOutput
+	next := ddb.ScanIterator(ctx, s.client)
 
-	s.emitter.Publish(fmt.Sprintf("items %d scanned, beginning purge", len(items)))
-
-	if s.dryRun {
-		s.logger.Debug("dry run enabled")
-		prettyPrint(items)
-		return nil
-	}
-
-	start := 0
-	end := defaultBatchSize
 	deleted := 0
 
-	for start < len(items) {
-
-		if end > len(items) {
-			end = len(items)
+	for !done {
+		out, err, done = next(&dynamodb.ScanInput{
+			TableName: &tableName,
+			AttributesToGet: []string{keys.PartitionKey, keys.SortKey},
+			Limit:    aws.Int32(defaultBatchSize),
+		})
+		if err != nil {
+			s.logger.Error("could not scan table", "error", err)
+			return err
 		}
 
-		batchItems := items[start:end]
+		if out == nil {
+			break
+		}
 
-		s.logger.Debug(fmt.Sprintf("batch delete %d items", len(batchItems)))
-		_, err = s.client.BatchDeleteItems(ctx, tableName, batchItems)
+		if s.dryRun {
+			s.logger.Debug("dry run enabled")
+			prettyPrint(out.Items)
+			return nil
+		}
+
+		_, err = s.client.BatchDeleteItems(ctx, tableName, out.Items)
 		if err != nil {
 			s.logger.Error("could not batch delete items", "error", err)
 			return err
 		}
+		deleted += len(out.Items)
 
-		deleted += len(batchItems)
-		start = end
-		end += defaultBatchSize
+		s.emitter.Publish(fmt.Sprintf("deleted %d items", deleted))
+		
 	}
 
 	s.emitter.Publish(fmt.Sprintf("purge complete, deleted %d items", deleted))

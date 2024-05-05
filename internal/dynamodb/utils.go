@@ -16,6 +16,7 @@ func JSONStringify(v any) string {
 	return string(data)
 }
 
+// FlattenAttrList - flattens the given attribute value list.
 func FlattenAttrList(data []map[string]types.AttributeValue) ([]map[string]any, error) {
 	transformed := []map[string]any{}
 
@@ -31,6 +32,8 @@ func FlattenAttrList(data []map[string]types.AttributeValue) ([]map[string]any, 
 	return transformed, nil
 }
 
+// FlattenAttrValue - flattens the given attribute value map.
+// Removes the "Value" attribute from the AttributeValueMember struct and returns the value as a map[string]any.
 func FlattenAttrValue(data map[string]types.AttributeValue) (map[string]any, error) {
 	transformed := map[string]any{}
 
