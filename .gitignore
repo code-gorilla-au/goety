@@ -26,3 +26,5 @@ tmp
 go.work
 
 .env.local
+
+test.json

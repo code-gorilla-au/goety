@@ -1,5 +1,6 @@
 COVER_OUTPUT_RAW := coverage.out
 COVER_OUTPUT_HTML := coverage.html
+TEST_JSON_OUT_FILE := test.json
 
 #####################
 ##@ Tests            
@@ -15,7 +16,7 @@ test-cover: ## generate html coverage report + open
 	open coverage.html
 
 test-purge: build ## Run purge integration tests
-	./goety purge -e http://localhost:8000 -t "dev-main-adjacent" -p "inventoryId" -s "relationshipId"
+	./goety purge -e $(DYNAMODB_LOCAL_ENDPOINT) -t $(TEST_TABLE_NAME) -p $(TEST_PRIMARY_KEY) -s $(TEST_SORT_KEY)
 
 test-dump: build ## Run dump integration tests
-	./goety dump -e http://localhost:8000 -t "dev-main-adjacent" -p "test.json"
+	./goety dump -e $(DYNAMODB_LOCAL_ENDPOINT) -t $(TEST_TABLE_NAME) -p $(TEST_JSON_OUT_FILE)
