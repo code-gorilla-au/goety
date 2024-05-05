@@ -220,3 +220,34 @@ func TestService_Dump(t *testing.T) {
 	odize.AssertNoError(t, err)
 
 }
+
+func Test_transformJSON(t *testing.T) {
+	group := odize.NewGroup(t, nil)
+
+	err := group.
+		Test("should remove Value property from a string attr", func(t *testing.T) {
+			example := map[string]types.AttributeValue{
+				"pk": &types.AttributeValueMemberS{Value: "pk"},
+			}
+
+			d, err := flattenAttrValue(example)
+			odize.AssertNoError(t, err)
+
+			odize.AssertEqual(t, "pk", d["pk"])
+		}).
+		Test("should remove Value property", func(t *testing.T) {
+			example := map[string]types.AttributeValue{
+				"pk": &types.AttributeValueMemberM{Value: map[string]types.AttributeValue{
+					"sk": &types.AttributeValueMemberS{Value: "sk"},
+				}},
+			}
+
+			d, err := flattenAttrValue(example)
+			odize.AssertNoError(t, err)
+
+			p := d["pk"].(map[string]any)
+			odize.AssertEqual(t, "sk", p["sk"])
+		}).
+		Run()
+	odize.AssertNoError(t, err)
+}

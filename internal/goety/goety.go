@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	ddb "github.com/code-gorilla-au/goety/internal/dynamodb"
 	"github.com/code-gorilla-au/goety/internal/emitter"
 )
@@ -99,7 +100,7 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, attrs 
 	var output *dynamodb.ScanOutput
 	next := ddb.ScanIterator(ctx, s.client)
 
-	result := []dynamodb.ScanOutput{}
+	result := []map[string]any{}
 
 	for !done {
 		output, err, done = next(&dynamodb.ScanInput{
@@ -115,7 +116,12 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, attrs 
 			break
 		}
 
-		result = append(result, *output)
+		items, transformErr := flattenAttrList(output.Items)
+		if err != nil {
+			s.logger.Error("could not transform items", "error", transformErr)
+			return transformErr
+		}
+		result = append(result, items...)
 	}
 
 	s.emitter.Publish(fmt.Sprintf("scanned %d items", len(result)))
@@ -151,4 +157,64 @@ func prettyPrint(v any) {
 	}
 
 	fmt.Println(string(data))
+}
+
+func flattenAttrList(data []map[string]types.AttributeValue) ([]map[string]any, error) {
+	transformed := []map[string]any{}
+
+	for _, item := range data {
+		transformedItem, err := flattenAttrValue(item)
+		if err != nil {
+			return nil, err
+		}
+
+		transformed = append(transformed, transformedItem)
+	}
+
+	return transformed, nil
+}
+
+func flattenAttrValue(data map[string]types.AttributeValue) (map[string]any, error) {
+	transformed := map[string]any{}
+
+	for key, value := range data {
+		switch v := value.(type) {
+		case *types.AttributeValueMemberS:
+			transformed[key] = v.Value
+		case *types.AttributeValueMemberN:
+			transformed[key] = v.Value
+		case *types.AttributeValueMemberB:
+			transformed[key] = v.Value
+		case *types.AttributeValueMemberBOOL:
+			transformed[key] = v.Value
+		case *types.AttributeValueMemberNULL:
+			transformed[key] = v.Value
+		case *types.AttributeValueMemberM:
+			var err error
+			transformed[key], err = flattenAttrValue(v.Value)
+			if err != nil {
+				return nil, err
+			}
+		case *types.AttributeValueMemberL:
+			result := []any{}
+			for _, item := range v.Value {
+				transformedItem, err := flattenAttrValue(map[string]types.AttributeValue{"L": item})
+				if err != nil {
+					return nil, err
+				}
+
+				result = append(result, transformedItem)
+			}
+			transformed[key] = result
+		case *types.AttributeValueMemberSS:
+			transformed[key] = v.Value
+		case *types.AttributeValueMemberNS:
+			transformed[key] = v.Value
+		case *types.AttributeValueMemberBS:
+			transformed[key] = v.Value
+		}
+
+	}
+
+	return transformed, nil
 }
