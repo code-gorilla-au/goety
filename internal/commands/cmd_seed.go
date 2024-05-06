@@ -59,7 +59,7 @@ func seedFunc(cmd *cobra.Command, args []string) {
 		defer spin.Stop("")
 	}
 
-	if err = goetyService.Seed(ctx, flagPurgeTableName, flagSeedFile); err != nil {
+	if err = goetyService.Seed(ctx, flagSeedTableName, flagSeedFile); err != nil {
 		log.Error("error seeding table", "error", err)
 		os.Exit(1)
 	}

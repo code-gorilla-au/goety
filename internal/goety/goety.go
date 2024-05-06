@@ -126,9 +126,6 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 		itemsScanned += len(output.Items)
 		s.emitter.Publish(fmt.Sprintf("scanned %d items", itemsScanned))
 
-		// if queryOpts.Limit != nil && int32(itemsScanned) >= *queryOpts.Limit {
-		// 	break
-		// }
 	}
 
 	s.emitter.Publish(fmt.Sprintf("scanned %d items", len(result)))
@@ -157,6 +154,11 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 	return nil
 }
 
+// Seed a table with items from a json file
+//
+// Example:
+//
+//	Seed(ctx, "my-table", "path/to/file.json")
 func (s Service) Seed(ctx context.Context, tableName string, filePath string) error {
 	s.emitter.Publish(fmt.Sprintf("putting items to table %s", tableName))
 
