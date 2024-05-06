@@ -39,6 +39,7 @@ func NewWith(ctx context.Context, configOpts func(*config.LoadOptions) error, db
 	return &client, nil
 }
 
+// Scan - scans a dynamodb table
 func (c *Client) Scan(ctx context.Context, input *ddb.ScanInput) (*ddb.ScanOutput, error) {
 	output, err := c.db.Scan(ctx, input)
 	if err != nil {
@@ -49,6 +50,7 @@ func (c *Client) Scan(ctx context.Context, input *ddb.ScanInput) (*ddb.ScanOutpu
 	return output, nil
 }
 
+// Put - puts an item into a dynamodb table
 func (c *Client) Put(ctx context.Context, input *ddb.PutItemInput) (*ddb.PutItemOutput, error) {
 	return c.db.PutItem(ctx, input)
 }
