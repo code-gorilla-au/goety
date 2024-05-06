@@ -55,7 +55,7 @@ func seedFunc(cmd *cobra.Command, args []string) {
 
 	if !flagRootVerbose {
 		spin := spinner.New(msgEmitter)
-		spin.Start("starting seed")
+		spin.Start("")
 		defer spin.Stop("")
 	}
 

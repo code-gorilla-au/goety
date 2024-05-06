@@ -38,43 +38,54 @@ func FlattenAttrValue(data map[string]types.AttributeValue) (map[string]any, err
 	transformed := map[string]any{}
 
 	for key, value := range data {
-		switch v := value.(type) {
-		case *types.AttributeValueMemberS:
-			transformed[key] = v.Value
-		case *types.AttributeValueMemberN:
-			transformed[key] = v.Value
-		case *types.AttributeValueMemberB:
-			transformed[key] = v.Value
-		case *types.AttributeValueMemberBOOL:
-			transformed[key] = v.Value
-		case *types.AttributeValueMemberNULL:
-			transformed[key] = v.Value
-		case *types.AttributeValueMemberM:
-			var err error
-			transformed[key], err = FlattenAttrValue(v.Value)
-			if err != nil {
-				return nil, err
-			}
-		case *types.AttributeValueMemberL:
-			result := []any{}
-			for _, item := range v.Value {
-				transformedItem, err := FlattenAttrValue(map[string]types.AttributeValue{"L": item})
-				if err != nil {
-					return nil, err
-				}
-
-				result = append(result, transformedItem)
-			}
-			transformed[key] = result
-		case *types.AttributeValueMemberSS:
-			transformed[key] = v.Value
-		case *types.AttributeValueMemberNS:
-			transformed[key] = v.Value
-		case *types.AttributeValueMemberBS:
-			transformed[key] = v.Value
+		transformedValue, err := extractAttrValue(value)
+		if err != nil {
+			return nil, err
 		}
 
+		transformed[key] = transformedValue
 	}
 
 	return transformed, nil
+}
+
+func extractAttrValue(value types.AttributeValue) (any, error) {
+	var returnVal any
+	switch v := value.(type) {
+	case *types.AttributeValueMemberS:
+		returnVal = v.Value
+	case *types.AttributeValueMemberN:
+		returnVal = v.Value
+	case *types.AttributeValueMemberB:
+		returnVal = v.Value
+	case *types.AttributeValueMemberBOOL:
+		returnVal = v.Value
+	case *types.AttributeValueMemberNULL:
+		returnVal = v.Value
+	case *types.AttributeValueMemberM:
+		var err error
+		returnVal, err = FlattenAttrValue(v.Value)
+		if err != nil {
+			return nil, err
+		}
+	case *types.AttributeValueMemberL:
+		result := []any{}
+		for _, item := range v.Value {
+			transformedItem, err := extractAttrValue(item)
+			if err != nil {
+				return nil, err
+			}
+
+			result = append(result, transformedItem)
+		}
+		returnVal = result
+	case *types.AttributeValueMemberSS:
+		returnVal = v.Value
+	case *types.AttributeValueMemberNS:
+		returnVal = v.Value
+	case *types.AttributeValueMemberBS:
+		returnVal = v.Value
+	}
+
+	return returnVal, nil
 }

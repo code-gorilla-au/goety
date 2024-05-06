@@ -1,7 +1,6 @@
 package goety
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -62,7 +61,6 @@ func WithFilterNameAttrs(attrName string) QueryFuncOpts {
 			filterNameAttr[tKey] = tVal
 		}
 
-		fmt.Println(filterNameAttr)
 		opts.FilterNameAttributes = filterNameAttr
 		return opts
 	}
@@ -88,7 +86,6 @@ func WithFilterNameValues(attrValues string) QueryFuncOpts {
 			filterNameValues[tKey] = &tVal
 		}
 
-		fmt.Println(filterNameValues)
 		opts.FilterNameValues = filterNameValues
 		return opts
 	}

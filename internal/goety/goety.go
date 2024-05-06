@@ -174,6 +174,8 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) er
 		return err
 	}
 
+	s.emitter.Publish(fmt.Sprintf("%d items to be loaded into table %s", len(itemList), tableName))
+
 	if s.dryRun {
 		s.logger.Debug("dry run enabled")
 		prettyPrint(itemList)
@@ -187,6 +189,8 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) er
 			return err
 		}
 
+		s.logger.Debug("putting item", "item", payload)
+
 		if _, err := s.client.Put(ctx, &dynamodb.PutItemInput{
 			TableName: &tableName,
 			Item:      payload,
@@ -195,7 +199,7 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) er
 		}
 	}
 
-	s.emitter.Publish("put complete")
+	s.emitter.Publish(fmt.Sprintf("seed complete with %d items inserted", len(itemList)))
 	return nil
 }
 
