@@ -15,5 +15,6 @@ func (w *WriteFile) WriteFile(name string, data []byte, perm fs.FileMode) error 
 }
 
 func (w *WriteFile) ReadFile(name string) ([]byte, error) {
-	return os.ReadFile(name)
+	cleanFile := filepath.Clean(name)
+	return os.ReadFile(cleanFile)
 }
