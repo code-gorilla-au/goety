@@ -94,12 +94,13 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 
 	result := []map[string]any{}
 
+	itemsScanned := 0
+
 	for !done {
 		output, err, done = next(&dynamodb.ScanInput{
 			TableName:            &tableName,
 			ProjectionExpression: queryOpts.ProjectedExpressions,
-			FilterExpression:     queryOpts.FilterCondition,
-			Limit:                queryOpts.Limit,
+			Limit: 			  aws.Int32(defaultBatchSize),
 		})
 		if err != nil {
 			s.logger.Error("could not scan table", "error", err)
@@ -116,6 +117,13 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 			return transformErr
 		}
 		result = append(result, items...)
+
+		itemsScanned += len(output.Items)
+		s.emitter.Publish(fmt.Sprintf("scanned %d items", itemsScanned))
+		
+		if queryOpts.Limit != nil && int32(itemsScanned) >= *queryOpts.Limit { 
+			break
+		}
 	}
 
 	s.emitter.Publish(fmt.Sprintf("scanned %d items", len(result)))
