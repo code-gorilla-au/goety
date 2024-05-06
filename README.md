@@ -7,7 +7,7 @@
 ## Using golang
 
 ```bash
-go install https://github.com/code-gorilla-au/goety@latest
+go install github.com/code-gorilla-au/goety@latest
 ```
 
 ## Usage
@@ -74,7 +74,7 @@ Flags:
   -e, --endpoint string          DynamoDB endpoint to connect to, if none is provide it will use the default aws endpoint
   -f, --filter string            Filter expression to apply to the scan operation
   -h, --help                     help for dump
-  -l, --limit int32              Limit the number of items to dump
+  -l, --limit int32              Limit the number of items returned per scan iteration
   -P, --path string              file path to save the json output
   -t, --table string             table name
 

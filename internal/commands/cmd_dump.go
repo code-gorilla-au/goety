@@ -36,7 +36,7 @@ func init() {
 	dumpCmd.Flags().StringVarP(&flagDumpEndpoint, "endpoint", "e", "", "DynamoDB endpoint to connect to, if none is provide it will use the default aws endpoint")
 	dumpCmd.Flags().StringVarP(&flagDumpFilePath, "path", "P", "", "file path to save the json output")
 	dumpCmd.Flags().StringSliceVarP(&flagDumpExtractAttrs, "attributes", "a", []string{}, "Optionally specify a list of attributes to extract from the table")
-	dumpCmd.Flags().Int32VarP(&flagDumpLimit, "limit", "l", 0, "Limit the number of items to dump")
+	dumpCmd.Flags().Int32VarP(&flagDumpLimit, "limit", "l", 0, "Limit the number of items returned per scan iteration")
 	dumpCmd.Flags().StringVarP(&flagDumpFilterExp, "filter", "f", "", "Filter expression to apply to the scan operation")
 	dumpCmd.Flags().StringVarP(&flagDumpFilterAttrName, "attribute-name", "N", "", "Filter expression attribute names")
 	dumpCmd.Flags().StringVarP(&flagDumpFilterAttrValue, "attribute-value", "V", "", "Filter expression attribute values")
