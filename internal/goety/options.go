@@ -42,6 +42,7 @@ func WithFilterExpression(condition string) QueryFuncOpts {
 	}
 }
 
+// WithFilterNameAttrs - provide a list of attribute names to filter on
 func WithFilterNameAttrs(attrName string) QueryFuncOpts {
 	return func(opts *QueryOpts) *QueryOpts {
 		if attrName == "" {
@@ -67,6 +68,7 @@ func WithFilterNameAttrs(attrName string) QueryFuncOpts {
 	}
 }
 
+// WithFilterNameValues - provide a list of attribute values to filter on
 func WithFilterNameValues(attrValues string) QueryFuncOpts {
 	return func(opts *QueryOpts) *QueryOpts {
 		if attrValues == "" {
@@ -92,6 +94,7 @@ func WithFilterNameValues(attrValues string) QueryFuncOpts {
 	}
 }
 
+// WithLimit - provide a limit to the query
 func WithLimit(limit int32) QueryFuncOpts {
 	return func(opts *QueryOpts) *QueryOpts {
 		if limit == 0 {
