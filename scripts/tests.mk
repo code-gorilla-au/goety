@@ -19,4 +19,4 @@ test-purge: build ## Run purge integration tests
 	./goety purge -e $(DYNAMODB_LOCAL_ENDPOINT) -t $(TEST_TABLE_NAME) -p $(TEST_PRIMARY_KEY) -s $(TEST_SORT_KEY)
 
 test-dump: build ## Run dump integration tests
-	./goety dump -e $(DYNAMODB_LOCAL_ENDPOINT) -t $(TEST_TABLE_NAME) -p $(TEST_JSON_OUT_FILE)
+	./goety dump  -t $(TEST_TABLE_NAME) -p $(TEST_JSON_OUT_FILE) -l 10 -p ooh-inv

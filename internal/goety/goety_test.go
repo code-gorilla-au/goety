@@ -217,7 +217,7 @@ func TestService_Dump(t *testing.T) {
 		
 			}
 
-			err := service.Dump(ctx, "my-table", "path", attrExp...)
+			err := service.Dump(ctx, "my-table", "path", WithAttrs(attrExp))
 			odize.AssertNoError(t, err)
 		}).
 		Run()

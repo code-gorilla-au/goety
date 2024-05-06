@@ -18,6 +18,7 @@ var (
 	flagDumpEndpoint     string
 	flagDumpFilePath     string
 	flagDumpExtractAttrs []string
+	flagDumpLimit		int32
 )
 
 var dumpCmd = &cobra.Command{
@@ -32,6 +33,7 @@ func init() {
 	dumpCmd.Flags().StringVarP(&flagDumpEndpoint, "endpoint", "e", "", "DynamoDB endpoint to connect to, if none is provide it will use the default aws endpoint")
 	dumpCmd.Flags().StringVarP(&flagDumpFilePath, "path", "p", "", "file path to save the json output")
 	dumpCmd.Flags().StringSliceVarP(&flagDumpExtractAttrs, "attributes", "a", []string{}, "Optionally specify a list of attributes to extract from the table")
+	dumpCmd.Flags().Int32VarP(&flagDumpLimit, "limit", "l", 0, "Limit the number of items to dump")
 }
 
 func dumpFunc(cmd *cobra.Command, args []string) {
@@ -59,7 +61,13 @@ func dumpFunc(cmd *cobra.Command, args []string) {
 		spin.Start("starting dump")
 		defer spin.Stop("dump complete")
 	}
-	_ = g.Dump(ctx, flagDumpTableName, flagDumpFilePath, flagDumpExtractAttrs...)
+	_ = g.Dump(
+		ctx, 
+		flagDumpTableName, 
+		flagDumpFilePath, 
+		goety.WithAttrs(flagDumpExtractAttrs),
+		goety.WithLimit(flagDumpLimit),
+	)
 
 }
 

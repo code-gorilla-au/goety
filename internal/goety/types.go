@@ -20,3 +20,12 @@ type TableKeys struct {
 
 type WriteFile struct {
 }
+
+
+type QueryOpts struct {
+	Limit *int32
+	FilterCondition *string
+	ProjectedExpressions *string
+}
+
+type QueryFuncOpts = func(*QueryOpts) *QueryOpts

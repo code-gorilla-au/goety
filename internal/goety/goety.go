@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -83,14 +82,10 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 // Example:
 //
 //	Dump(ctx, "my-table", "path/to/file.json", []string{"attr1", "attr2"})
-func (s Service) Dump(ctx context.Context, tableName string, path string, attrs ...string) error {
+func (s Service) Dump(ctx context.Context, tableName string, path string, opts ...QueryFuncOpts) error {
 	s.emitter.Publish(fmt.Sprintf("dumping table %s to file %s", tableName, path))
 
-	var projExp *string
-
-	if len(attrs) > 0 {
-		projExp = aws.String(strings.Join(attrs, ", "))
-	}
+	queryOpts :=  WithQueryOptions(opts)
 
 	done := false
 	var err error
@@ -102,7 +97,9 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, attrs 
 	for !done {
 		output, err, done = next(&dynamodb.ScanInput{
 			TableName:            &tableName,
-			ProjectionExpression: projExp,
+			ProjectionExpression: queryOpts.ProjectedExpressions,
+			FilterExpression:     queryOpts.FilterCondition,
+			Limit:                queryOpts.Limit,
 		})
 		if err != nil {
 			s.logger.Error("could not scan table", "error", err)
