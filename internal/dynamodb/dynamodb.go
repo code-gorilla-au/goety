@@ -46,13 +46,8 @@ func (c *Client) Scan(ctx context.Context, input *ddb.ScanInput) (*ddb.ScanOutpu
 		return output, err
 	}
 
-	if len(output.Items) == 0 {
-		c.logger.Error("no items returned")
-		return output, ErrNoItems
-	}
 	return output, nil
 }
-
 
 // BatchDeleteItems - deletes items in a batch Note, max size is 25 items within a batch
 func (c *Client) BatchDeleteItems(ctx context.Context, tableName string, keys []map[string]types.AttributeValue) (*ddb.BatchWriteItemOutput, error) {

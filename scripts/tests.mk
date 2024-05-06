@@ -19,4 +19,4 @@ test-purge: build ## Run purge integration tests
 	AWS_PROFILE=$(AWS_PROFILE) ./goety purge -e $(DYNAMODB_LOCAL_ENDPOINT) -t $(TEST_TABLE_NAME) -p $(TEST_PRIMARY_KEY) -s $(TEST_SORT_KEY)
 
 test-dump: build ## Run dump integration tests
-	AWS_PROFILE=$(AWS_PROFILE) ./goety dump  -t $(TEST_TABLE_NAME) --path $(TEST_JSON_OUT_FILE) -l 10
+	AWS_PROFILE=$(AWS_PROFILE) ./goety dump  -t $(TEST_TABLE_NAME) --path $(TEST_JSON_OUT_FILE) -f "contains(#pk, :pk)" -N "#pk = pk" -V ":pk = AGREEMENT"

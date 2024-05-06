@@ -3,6 +3,7 @@ package goety
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -43,9 +44,9 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 
 	for !done {
 		out, err, done = next(&dynamodb.ScanInput{
-			TableName: &tableName,
+			TableName:       &tableName,
 			AttributesToGet: []string{keys.PartitionKey, keys.SortKey},
-			Limit:    aws.Int32(defaultBatchSize),
+			Limit:           aws.Int32(defaultBatchSize),
 		})
 		if err != nil {
 			s.logger.Error("could not scan table", "error", err)
@@ -70,7 +71,7 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 		deleted += len(out.Items)
 
 		s.emitter.Publish(fmt.Sprintf("deleted %d items", deleted))
-		
+
 	}
 
 	s.emitter.Publish(fmt.Sprintf("purge complete, deleted %d items", deleted))
@@ -85,7 +86,7 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 func (s Service) Dump(ctx context.Context, tableName string, path string, opts ...QueryFuncOpts) error {
 	s.emitter.Publish(fmt.Sprintf("dumping table %s to file %s", tableName, path))
 
-	queryOpts :=  WithQueryOptions(opts)
+	queryOpts := WithQueryOptions(opts)
 
 	done := false
 	var err error
@@ -97,12 +98,15 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 	itemsScanned := 0
 
 	for !done {
-		output, err, done = next(&dynamodb.ScanInput{
-			TableName:            &tableName,
-			ProjectionExpression: queryOpts.ProjectedExpressions,
-			Limit: 			  aws.Int32(defaultBatchSize),
-		})
-		if err != nil {
+		output, err, done = next(
+			&dynamodb.ScanInput{
+				TableName:                 &tableName,
+				ProjectionExpression:      queryOpts.ProjectedExpressions,
+				FilterExpression:          queryOpts.FilterExpression,
+				ExpressionAttributeNames:  queryOpts.FilterNameAttributes,
+				ExpressionAttributeValues: queryOpts.FilterNameValues,
+			})
+		if err != nil && !errors.Is(err, ddb.ErrNoItems) {
 			s.logger.Error("could not scan table", "error", err)
 			return err
 		}
@@ -120,10 +124,10 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 
 		itemsScanned += len(output.Items)
 		s.emitter.Publish(fmt.Sprintf("scanned %d items", itemsScanned))
-		
-		if queryOpts.Limit != nil && int32(itemsScanned) >= *queryOpts.Limit { 
-			break
-		}
+
+		// if queryOpts.Limit != nil && int32(itemsScanned) >= *queryOpts.Limit {
+		// 	break
+		// }
 	}
 
 	s.emitter.Publish(fmt.Sprintf("scanned %d items", len(result)))
@@ -148,6 +152,7 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 	}
 
 	s.emitter.Publish("dump complete")
+	s.logger.Info("dump complete", "items", itemsScanned)
 	return nil
 }
 

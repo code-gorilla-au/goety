@@ -46,20 +46,10 @@ func TestClient_Scan(t *testing.T) {
 
 			odize.AssertEqual(t, result.Items[0]["key"].(*types.AttributeValueMemberS).Value, "value")
 		}).
-		Test("should return error on no records", func(t *testing.T) {
-			db.ScanFunc = func(ctx context.Context, params *dynamodb.ScanInput, optFns ...func(*dynamodb.Options)) (*dynamodb.ScanOutput, error) {
-				return &dynamodb.ScanOutput{}, nil
-			}
-
-			input := dynamodb.ScanInput{}
-			_, err := client.Scan(ctx, &input)
-			odize.AssertTrue(t, errors.Is(err, ErrNoItems))
-		}).
 		Run()
 
 	odize.AssertNoError(t, err)
 }
-
 
 func TestClient_BatchDeleteItems(t *testing.T) {
 	logger := logging.New(true)

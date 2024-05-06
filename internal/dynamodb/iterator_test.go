@@ -5,16 +5,15 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	ddb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/code-gorilla-au/odize"
 )
 
 type mockDDBScanner struct {
-	ScanFunc func(ctx context.Context, input *ddb.ScanInput) (*ddb.ScanOutput, error)
+	ScanFunc func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error)
 }
 
-func (m *mockDDBScanner) Scan(ctx context.Context, input *ddb.ScanInput) (*ddb.ScanOutput, error) {
+func (m *mockDDBScanner) Scan(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
 	return m.ScanFunc(ctx, input)
 }
 
@@ -27,7 +26,7 @@ func TestScanIterator(t *testing.T) {
 
 	group.BeforeEach(func() {
 		mockScanner = &mockDDBScanner{
-			ScanFunc: func(ctx context.Context, input *ddb.ScanInput) (*ddb.ScanOutput, error) {
+			ScanFunc: func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
 				callIter++
 				return &dynamodb.ScanOutput{
 					LastEvaluatedKey: map[string]types.AttributeValue{
@@ -59,7 +58,7 @@ func TestScanIterator(t *testing.T) {
 			odize.AssertFalse(t, done)
 		}).
 		Test("iterator with no next calls should return empty invocation", func(t *testing.T) {
-			mockScanner.ScanFunc = func(ctx context.Context, input *ddb.ScanInput) (*ddb.ScanOutput, error) {
+			mockScanner.ScanFunc = func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
 				return &dynamodb.ScanOutput{
 					LastEvaluatedKey: nil,
 				}, nil
@@ -71,7 +70,7 @@ func TestScanIterator(t *testing.T) {
 			odize.AssertFalse(t, output == nil)
 		}).
 		Test("iterator with no next calls should return done as true", func(t *testing.T) {
-			mockScanner.ScanFunc = func(ctx context.Context, input *ddb.ScanInput) (*ddb.ScanOutput, error) {
+			mockScanner.ScanFunc = func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
 				return &dynamodb.ScanOutput{
 					LastEvaluatedKey: nil,
 				}, nil

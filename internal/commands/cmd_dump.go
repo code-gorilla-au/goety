@@ -14,11 +14,14 @@ import (
 )
 
 var (
-	flagDumpTableName    string
-	flagDumpEndpoint     string
-	flagDumpFilePath     string
-	flagDumpExtractAttrs []string
-	flagDumpLimit		int32
+	flagDumpTableName       string
+	flagDumpEndpoint        string
+	flagDumpFilePath        string
+	flagDumpExtractAttrs    []string
+	flagDumpLimit           int32
+	flagDumpFilterExp       string
+	flagDumpFilterAttrName  string
+	flagDumpFilterAttrValue string
 )
 
 var dumpCmd = &cobra.Command{
@@ -34,6 +37,9 @@ func init() {
 	dumpCmd.Flags().StringVarP(&flagDumpFilePath, "path", "P", "", "file path to save the json output")
 	dumpCmd.Flags().StringSliceVarP(&flagDumpExtractAttrs, "attributes", "a", []string{}, "Optionally specify a list of attributes to extract from the table")
 	dumpCmd.Flags().Int32VarP(&flagDumpLimit, "limit", "l", 0, "Limit the number of items to dump")
+	dumpCmd.Flags().StringVarP(&flagDumpFilterExp, "filter", "f", "", "Filter expression to apply to the scan operation")
+	dumpCmd.Flags().StringVarP(&flagDumpFilterAttrName, "attribute-name", "N", "", "Filter expression attribute names")
+	dumpCmd.Flags().StringVarP(&flagDumpFilterAttrValue, "attribute-value", "V", "", "Filter expression attribute values")
 }
 
 func dumpFunc(cmd *cobra.Command, args []string) {
@@ -62,11 +68,14 @@ func dumpFunc(cmd *cobra.Command, args []string) {
 		defer spin.Stop("dump complete")
 	}
 	_ = g.Dump(
-		ctx, 
-		flagDumpTableName, 
-		flagDumpFilePath, 
+		ctx,
+		flagDumpTableName,
+		flagDumpFilePath,
 		goety.WithAttrs(flagDumpExtractAttrs),
 		goety.WithLimit(flagDumpLimit),
+		goety.WithFilterExpression(flagDumpFilterExp),
+		goety.WithFilterNameAttrs(flagDumpFilterAttrName),
+		goety.WithFilterNameValues(flagDumpFilterAttrValue),
 	)
 
 }
