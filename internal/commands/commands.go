@@ -21,6 +21,7 @@ func init() {
 
 	rootCmd.AddCommand(purgeCmd)
 	rootCmd.AddCommand(dumpCmd)
+	rootCmd.AddCommand(seedCmd)
 }
 
 func Execute() error {

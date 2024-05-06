@@ -41,7 +41,7 @@ func TestService_Purge(t *testing.T) {
 							"pk": &types.AttributeValueMemberS{Value: "pk"},
 							"sk": &types.AttributeValueMemberS{Value: "sk"},
 						},
-					}, 
+					},
 				}, nil
 			},
 			BatchDeleteItemsFunc: func(ctx context.Context, tableName string, keys []map[string]types.AttributeValue) (*dynamodb.BatchWriteItemOutput, error) {
@@ -108,10 +108,15 @@ func TestService_Purge(t *testing.T) {
 
 type mockWriteFile struct {
 	writeFileFunc func(filename string, data []byte) error
+	readFileFunc  func(filename string) ([]byte, error)
 }
 
 func (m *mockWriteFile) WriteFile(name string, data []byte, perm fs.FileMode) error {
 	return m.writeFileFunc(name, data)
+}
+
+func (m *mockWriteFile) ReadFile(name string) ([]byte, error) {
+	return m.readFileFunc(name)
 }
 
 func TestService_Dump(t *testing.T) {
@@ -214,7 +219,7 @@ func TestService_Dump(t *testing.T) {
 						},
 					},
 				}, nil
-		
+
 			}
 
 			err := service.Dump(ctx, "my-table", "path", WithAttrs(attrExp))

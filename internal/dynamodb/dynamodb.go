@@ -49,6 +49,10 @@ func (c *Client) Scan(ctx context.Context, input *ddb.ScanInput) (*ddb.ScanOutpu
 	return output, nil
 }
 
+func (c *Client) Put(ctx context.Context, input *ddb.PutItemInput) (*ddb.PutItemOutput, error) {
+	return c.db.PutItem(ctx, input)
+}
+
 // BatchDeleteItems - deletes items in a batch Note, max size is 25 items within a batch
 func (c *Client) BatchDeleteItems(ctx context.Context, tableName string, keys []map[string]types.AttributeValue) (*ddb.BatchWriteItemOutput, error) {
 	txnWrite := []types.WriteRequest{}

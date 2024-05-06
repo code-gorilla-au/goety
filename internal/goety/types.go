@@ -10,7 +10,7 @@ type Service struct {
 	logger     logging.Logger
 	dryRun     bool
 	client     DynamoClient
-	fileWriter fileWriter
+	fileWriter fileReaderWriter
 	emitter    emitter.MessagePublisher
 }
 

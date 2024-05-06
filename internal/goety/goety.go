@@ -8,6 +8,7 @@ import (
 	"log/slog"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddb "github.com/code-gorilla-au/goety/internal/dynamodb"
 	"github.com/code-gorilla-au/goety/internal/emitter"
@@ -153,6 +154,46 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 
 	s.emitter.Publish("dump complete")
 	s.logger.Info("dump complete", "items", itemsScanned)
+	return nil
+}
+
+func (s Service) Seed(ctx context.Context, tableName string, filePath string) error {
+	s.emitter.Publish(fmt.Sprintf("putting items to table %s", tableName))
+
+	data, err := s.fileWriter.ReadFile(filePath)
+	if err != nil {
+		s.logger.Error("could not read file", "error", err)
+		return err
+	}
+
+	itemList := []map[string]any{}
+	if err := json.Unmarshal(data, &itemList); err != nil {
+		s.logger.Error("could not unmarshal file", "error", err)
+		return err
+	}
+
+	if s.dryRun {
+		s.logger.Debug("dry run enabled")
+		prettyPrint(itemList)
+		return nil
+	}
+
+	for _, item := range itemList {
+		payload, err := attributevalue.MarshalMap(item)
+		if err != nil {
+			s.logger.Error("could not marshal item", "error", err)
+			return err
+		}
+
+		if _, err := s.client.Put(ctx, &dynamodb.PutItemInput{
+			TableName: &tableName,
+			Item:      payload,
+		}); err != nil {
+			return err
+		}
+	}
+
+	s.emitter.Publish("put complete")
 	return nil
 }
 
