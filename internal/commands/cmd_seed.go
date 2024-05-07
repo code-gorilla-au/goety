@@ -43,7 +43,7 @@ func seedFunc(cmd *cobra.Command, args []string) {
 	}
 
 	log.Debug("loading dynamodb client")
-	dbClient, err := dynamodb.NewClient(ctx, flagRootAwsRegion, flagPurgeEndpoint)
+	dbClient, err := dynamodb.NewClient(ctx, flagRootAwsRegion, flagSeedEndpoint)
 	if err != nil {
 		log.Error("could not load client")
 		os.Exit(1)

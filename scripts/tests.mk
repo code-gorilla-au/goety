@@ -16,9 +16,10 @@ test-cover: ## generate html coverage report + open
 	open coverage.html
 
 test-purge: build ## Run purge integration tests
-	AWS_PROFILE=$(AWS_PROFILE) ./goety purge -e $(DYNAMODB_LOCAL_ENDPOINT) -t $(TEST_TABLE_NAME) -p $(TEST_PRIMARY_KEY) -s $(TEST_SORT_KEY)
+	./goety purge -e $(DYNAMODB_LOCAL_ENDPOINT) -t $(TEST_TABLE_NAME) -p $(TEST_PRIMARY_KEY) -s $(TEST_SORT_KEY)
+	
 test-seed: build ## Run seed integration tests
 	./goety seed -e $(DYNAMODB_LOCAL_ENDPOINT) -t $(TEST_TABLE_NAME) -f $(PWD)/$(TEST_JSON_OUT_FILE)
 
 test-dump: build ## Run dump integration tests
-	AWS_PROFILE=$(AWS_PROFILE) ./goety dump -e $(DYNAMODB_LOCAL_ENDPOINT)  -t $(TEST_TABLE_NAME) --path $(TEST_JSON_OUT_FILE)
+	./goety dump -e $(DYNAMODB_LOCAL_ENDPOINT)  -t $(TEST_TABLE_NAME) --path $(TEST_JSON_OUT_FILE)
