@@ -21,4 +21,4 @@ test-seed: build ## Run seed integration tests
 	./goety seed -e $(DYNAMODB_LOCAL_ENDPOINT) -t $(TEST_TABLE_NAME) -f $(PWD)/$(TEST_JSON_OUT_FILE)
 
 test-dump: build ## Run dump integration tests
-	AWS_PROFILE=$(AWS_PROFILE) ./goety dump  -t $(TEST_TABLE_NAME) --path $(TEST_JSON_OUT_FILE) -f "contains(#pk, :pk)" -N "#pk = pk" -V ":pk = AGREEMENT"
+	AWS_PROFILE=$(AWS_PROFILE) ./goety dump -e $(DYNAMODB_LOCAL_ENDPOINT)  -t $(TEST_TABLE_NAME) --path $(TEST_JSON_OUT_FILE)

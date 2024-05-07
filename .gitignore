@@ -28,3 +28,4 @@ go.work
 .env.local
 
 test.json
+fixed-agreements.json
