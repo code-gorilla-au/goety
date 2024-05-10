@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -35,6 +36,7 @@ func New(client DynamoClient, logger *slog.Logger, emitter emitter.MessagePublis
 //	Purge(ctx, "my-table", TableKeys{ PartitionKey: "pk", SortKey: "sk" })
 func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) error {
 	s.emitter.Publish(fmt.Sprintf("scanning table %s for items to purge", tableName))
+	now := time.Now()
 
 	done := false
 	var err error
@@ -58,6 +60,10 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 			break
 		}
 
+		if len(out.Items) == 0 {
+			break
+		}
+
 		if s.dryRun {
 			s.logger.Debug("dry run enabled")
 			prettyPrint(out.Items)
@@ -75,7 +81,9 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 
 	}
 
-	s.emitter.Publish(fmt.Sprintf("purge complete, deleted %d items", deleted))
+	since := time.Since(now)
+
+	s.emitter.Publish(fmt.Sprintf("purge complete, deleted %d items, time taken [%v]", deleted, since))
 	return nil
 }
 
