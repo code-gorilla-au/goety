@@ -1,15 +1,15 @@
 services:
-  dynamodb-ooh-sites:
+  db:
     command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ./data"
     image: "amazon/dynamodb-local:latest"
-    container_name: goety-dynamodb
+    container_name: goety-db
     user: root
     ports:
-      - "8000:8000"
+      - "8100:8000"
     volumes:
       - dynamo-data:/home/dynamodblocal/data
     working_dir: /home/dynamodblocal
-networks:
-  localstack-net:
-    external: false
-    driver: bridge
+
+volumes:
+  database-data:
+  dynamo-data:
