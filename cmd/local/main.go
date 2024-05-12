@@ -44,7 +44,7 @@ func main() {
 	logger.Info("seeding table", "table", config.TableName, "count", itemsToSeed)
 	now := time.Now()
 
-	seedTable(db, config.TableName, 1000)
+	_ = seedTable(db, config, 1000)
 
 	since := time.Since(now).Seconds()
 	logger.Info("seed complete", "duration", since)
@@ -111,14 +111,14 @@ func createTable(ctx context.Context, db *dynamodb.Client, config Config) error 
 	return err
 }
 
-func seedTable(db *dynamodb.Client, tableName string, items int) error {
+func seedTable(db *dynamodb.Client, config Config, items int) error {
 	var allErrs error
 	for i := 0; i < items; i++ {
 		_, err := db.PutItem(context.Background(), &dynamodb.PutItemInput{
-			TableName: &tableName,
+			TableName: &config.TableName,
 			Item: map[string]types.AttributeValue{
-				"pk": &types.AttributeValueMemberS{Value: fmt.Sprintf("pk#%d", i)},
-				"sk": &types.AttributeValueMemberS{Value: fmt.Sprintf("sk#%d", i)},
+				config.TablePrimaryKey: &types.AttributeValueMemberS{Value: fmt.Sprintf("pk#%d", i)},
+				config.TableSortKey:    &types.AttributeValueMemberS{Value: fmt.Sprintf("sk#%d", i)},
 			},
 		})
 		if err != nil {

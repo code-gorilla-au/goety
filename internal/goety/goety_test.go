@@ -100,6 +100,16 @@ func TestService_Purge(t *testing.T) {
 			err := service.Purge(ctx, "my-table", TableKeys{PartitionKey: "pk", SortKey: "sk"})
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
 		}).
+		Test("should not fail if scan has no items", func(t *testing.T) {
+
+			client.ScanFunc = func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
+				return &dynamodb.ScanOutput{}, nil
+			}
+
+			err := service.Purge(ctx, "my-table", TableKeys{PartitionKey: "pk", SortKey: "sk"})
+			odize.AssertNoError(t, err)
+			odize.AssertEqual(t, 0, callBatchDelete)
+		}).
 		Run()
 
 	odize.AssertNoError(t, err)
