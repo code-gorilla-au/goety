@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.27.11
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.13.14
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.32.0
-	github.com/code-gorilla-au/env v0.0.0-20231101054621-7a54afca2a47
+	github.com/code-gorilla-au/env v1.0.0
 	github.com/code-gorilla-au/odize v1.3.1
 	github.com/spf13/cobra v1.8.0
 )
