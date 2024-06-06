@@ -11,6 +11,9 @@ test: test-unit ## Run all tests
 test-unit: ## Run unit tests
 	go test -coverprofile $(COVER_OUTPUT_RAW) --short -cover  -failfast ./...
 
+test-watch: ##
+	gow test -coverprofile $(COVER_OUTPUT_RAW) --short -cover  -failfast ./...
+
 test-cover: ## generate html coverage report + open
 	go tool cover -html=$(COVER_OUTPUT_RAW) -o $(COVER_OUTPUT_HTML)
 	open coverage.html

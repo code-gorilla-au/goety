@@ -12,3 +12,4 @@ tools-scan: ## get all the tools required
 
 tools-dev: ## Dev specific tooling
 	go install github.com/matryer/moq@latest
+	go install github.com/mitranim/gow@latest
