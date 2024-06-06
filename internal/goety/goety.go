@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	ddb "github.com/code-gorilla-au/goety/internal/dynamodb"
 	"github.com/code-gorilla-au/goety/internal/emitter"
 )
@@ -124,14 +125,13 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 			break
 		}
 
-		items, transformErr := ddb.FlattenAttrList(output.Items)
-		if transformErr != nil {
-			s.logger.Error("could not transform items", "error", transformErr)
-			return transformErr
+		items, err := transform(output.Items, queryOpts.RawOutput)
+		if err != nil {
+			s.logger.Error("could not transform items", "error", err)
+			return err
 		}
-		result = append(result, items...)
 
-		itemsScanned += len(output.Items)
+		itemsScanned += len(items)
 		s.emitter.Publish(fmt.Sprintf("scanned %d items", itemsScanned))
 
 	}
@@ -219,4 +219,28 @@ func prettyPrint(v any) {
 	}
 
 	fmt.Println(string(data))
+}
+
+func transform(items []map[string]types.AttributeValue, rawOutput bool) ([]map[string]any, error) {
+	out := []map[string]any{}
+
+	if !rawOutput {
+		items, transformErr := ddb.FlattenAttrList(items)
+		if transformErr != nil {
+			return out, transformErr
+		}
+		out = append(out, items...)
+	}
+
+	data, err := json.Marshal(items)
+	if err != nil {
+		return out, err
+	}
+
+	err = json.Unmarshal(data, &out)
+	if err != nil {
+		return out, err
+	}
+
+	return out, nil
 }

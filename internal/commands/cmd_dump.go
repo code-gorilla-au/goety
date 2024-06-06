@@ -80,6 +80,7 @@ func dumpFunc(cmd *cobra.Command, args []string) {
 		goety.WithFilterExpression(flagDumpFilterExp),
 		goety.WithFilterNameAttrs(flagDumpFilterAttrName),
 		goety.WithFilterNameValues(flagDumpFilterAttrValue),
+		goety.WithRawOutput(flagDumpRawOutput),
 	)
 
 }

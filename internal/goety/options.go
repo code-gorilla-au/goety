@@ -102,3 +102,10 @@ func WithLimit(limit int32) QueryFuncOpts {
 		return opts
 	}
 }
+
+func WithRawOutput(raw bool) QueryFuncOpts {
+	return func(opts *QueryOpts) *QueryOpts {
+		opts.RawOutput = raw
+		return opts
+	}
+}

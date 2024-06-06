@@ -28,6 +28,7 @@ type QueryOpts struct {
 	ProjectedExpressions *string
 	FilterNameAttributes map[string]string
 	FilterNameValues     map[string]types.AttributeValue
+	RawOutput            bool
 }
 
 type QueryFuncOpts = func(*QueryOpts) *QueryOpts
