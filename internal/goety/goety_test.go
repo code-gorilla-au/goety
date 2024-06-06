@@ -200,8 +200,8 @@ func TestService_Dump(t *testing.T) {
 		Test("should output", func(t *testing.T) {
 			fileWriter = mockWriteFile{
 				writeFileFunc: func(filename string, data []byte) error {
-					fmt.Println("writing file", string(data))
 					callWriteFile++
+					odize.AssertEqual(t, "[{\"pk\":\"pk\",\"sk\":\"sk\"}]", string(data))
 					return nil
 				},
 			}
@@ -210,13 +210,13 @@ func TestService_Dump(t *testing.T) {
 			odize.AssertNoError(t, err)
 
 			odize.AssertEqual(t, 1, callScanAll)
-			odize.AssertEqual(t, 2, callWriteFile)
+			odize.AssertEqual(t, 1, callWriteFile)
 		}).
 		Test("should output raw", func(t *testing.T) {
 			fileWriter = mockWriteFile{
 				writeFileFunc: func(filename string, data []byte) error {
-					fmt.Println("writing file", string(data))
 					callWriteFile++
+					odize.AssertEqual(t, `[{"pk":{"S":"pk"},"sk":{"S":"sk"}}]`, string(data))
 					return nil
 				},
 			}
@@ -225,8 +225,8 @@ func TestService_Dump(t *testing.T) {
 			odize.AssertNoError(t, err)
 
 			odize.AssertEqual(t, 1, callScanAll)
-			odize.AssertEqual(t, 2, callWriteFile)
-		}).
+			odize.AssertEqual(t, 1, callWriteFile)
+		}, odize.Only()).
 		Test("should return error if scan fails", func(t *testing.T) {
 			expectedErr := errors.New("scan all error")
 			client.ScanFunc = func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {

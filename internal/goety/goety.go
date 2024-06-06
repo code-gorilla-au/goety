@@ -223,16 +223,21 @@ func prettyPrint(v any) {
 	fmt.Println(string(data))
 }
 
-func transform(items []map[string]types.AttributeValue, rawOutput bool) ([]map[string]any, error) {
+func transform(attrData []map[string]types.AttributeValue, rawOutput bool) ([]map[string]any, error) {
 	out := []map[string]any{}
 
 	if !rawOutput {
-		items, transformErr := ddb.FlattenAttrList(items)
+		items, transformErr := ddb.FlattenAttrList(attrData)
 		if transformErr != nil {
 			return out, transformErr
 		}
 		out = append(out, items...)
 		return out, nil
+	}
+
+	items, err := ddb.ConvertAVValues(attrData)
+	if err != nil {
+		return out, err
 	}
 
 	data, err := json.Marshal(items)

@@ -98,3 +98,98 @@ func extractAttrValue(value types.AttributeValue) (any, error) {
 
 	return returnVal, nil
 }
+
+func ConvertAVValues(data []map[string]types.AttributeValue) ([]map[string]AVer, error) {
+	transformed := []map[string]AVer{}
+
+	for _, item := range data {
+		transformedItem, err := ConvertAVValue(item)
+		if err != nil {
+			return nil, err
+		}
+
+		transformed = append(transformed, transformedItem)
+	}
+
+	return transformed, nil
+}
+
+func ConvertAVValue(data map[string]types.AttributeValue) (map[string]AVer, error) {
+	transformed := map[string]AVer{}
+
+	for key, value := range data {
+		transformedValue, err := convertAVValue(value)
+		if err != nil {
+			return nil, err
+		}
+
+		transformed[key] = transformedValue
+	}
+
+	return transformed, nil
+}
+
+func convertAVValue(value types.AttributeValue) (AVer, error) {
+	var returnVal AVer
+	switch v := value.(type) {
+	case *types.AttributeValueMemberS:
+		returnVal = AVString{
+			S: v.Value,
+		}
+	case *types.AttributeValueMemberN:
+		returnVal = AVNumber{
+			N: v.Value,
+		}
+	case *types.AttributeValueMemberB:
+		returnVal = AVByte{
+			B: v.Value,
+		}
+	case *types.AttributeValueMemberBOOL:
+		returnVal = AVBool{
+			BOOL: v.Value,
+		}
+	case *types.AttributeValueMemberNULL:
+		returnVal = AVNull{
+			NULL: v.Value,
+		}
+	case *types.AttributeValueMemberM:
+		var err error
+		result := map[string]any{}
+		for key, value := range v.Value {
+			result[key], err = convertAVValue(value)
+			if err != nil {
+				return nil, err
+			}
+		}
+		returnVal = AVMap{
+			M: result,
+		}
+	case *types.AttributeValueMemberL:
+		result := []any{}
+		for _, item := range v.Value {
+			transformedItem, err := convertAVValue(item)
+			if err != nil {
+				return nil, err
+			}
+
+			result = append(result, transformedItem)
+		}
+		returnVal = AVList{
+			L: result,
+		}
+	case *types.AttributeValueMemberSS:
+		returnVal = AVStringSet{
+			SS: v.Value,
+		}
+	case *types.AttributeValueMemberNS:
+		returnVal = AVNumberSet{
+			NS: v.Value,
+		}
+	case *types.AttributeValueMemberBS:
+		returnVal = AVByteSet{
+			BS: v.Value,
+		}
+	}
+
+	return returnVal, nil
+}
