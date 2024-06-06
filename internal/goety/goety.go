@@ -125,7 +125,7 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 			break
 		}
 
-		items, err := transform(output.Items, queryOpts.RawOutput)
+		items, err := transformDumpOutput(output.Items, queryOpts.RawOutput)
 		if err != nil {
 			s.logger.Error("could not transform items", "error", err)
 			return err
@@ -223,7 +223,7 @@ func prettyPrint(v any) {
 	fmt.Println(string(data))
 }
 
-func transform(attrData []map[string]types.AttributeValue, rawOutput bool) ([]map[string]any, error) {
+func transformDumpOutput(attrData []map[string]types.AttributeValue, rawOutput bool) ([]map[string]any, error) {
 	out := []map[string]any{}
 
 	if !rawOutput {
