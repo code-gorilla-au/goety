@@ -22,6 +22,7 @@ var (
 	flagDumpFilterExp       string
 	flagDumpFilterAttrName  string
 	flagDumpFilterAttrValue string
+	flagDumpRawOutput       bool
 )
 
 var dumpCmd = &cobra.Command{
@@ -42,6 +43,7 @@ func init() {
 	dumpCmd.Flags().StringVarP(&flagDumpFilterExp, "filter", "f", "", "Filter expression to apply to the scan operation")
 	dumpCmd.Flags().StringVarP(&flagDumpFilterAttrName, "attribute-name", "N", "", "Filter expression attribute names")
 	dumpCmd.Flags().StringVarP(&flagDumpFilterAttrValue, "attribute-value", "V", "", "Filter expression attribute values")
+	dumpCmd.Flags().BoolVarP(&flagDumpRawOutput, "raw-output", "r", false, "Optional flag to output the dynamodb scan without transformation")
 }
 
 func dumpFunc(cmd *cobra.Command, args []string) {
