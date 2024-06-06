@@ -159,6 +159,7 @@ func TestService_Dump(t *testing.T) {
 
 		fileWriter = mockWriteFile{
 			writeFileFunc: func(filename string, data []byte) error {
+				fmt.Println("writing file", string(data))
 				callWriteFile++
 				return nil
 			},
@@ -195,6 +196,36 @@ func TestService_Dump(t *testing.T) {
 
 			odize.AssertEqual(t, 1, callScanAll)
 			odize.AssertEqual(t, 0, callWriteFile)
+		}).
+		Test("should output", func(t *testing.T) {
+			fileWriter = mockWriteFile{
+				writeFileFunc: func(filename string, data []byte) error {
+					fmt.Println("writing file", string(data))
+					callWriteFile++
+					return nil
+				},
+			}
+
+			err := service.Dump(ctx, "my-table", "path")
+			odize.AssertNoError(t, err)
+
+			odize.AssertEqual(t, 1, callScanAll)
+			odize.AssertEqual(t, 2, callWriteFile)
+		}).
+		Test("should output raw", func(t *testing.T) {
+			fileWriter = mockWriteFile{
+				writeFileFunc: func(filename string, data []byte) error {
+					fmt.Println("writing file", string(data))
+					callWriteFile++
+					return nil
+				},
+			}
+
+			err := service.Dump(ctx, "my-table", "path", WithRawOutput(true))
+			odize.AssertNoError(t, err)
+
+			odize.AssertEqual(t, 1, callScanAll)
+			odize.AssertEqual(t, 2, callWriteFile)
 		}).
 		Test("should return error if scan fails", func(t *testing.T) {
 			expectedErr := errors.New("scan all error")

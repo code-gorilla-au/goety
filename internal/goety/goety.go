@@ -131,6 +131,8 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 			return err
 		}
 
+		result = append(result, items...)
+
 		itemsScanned += len(items)
 		s.emitter.Publish(fmt.Sprintf("scanned %d items", itemsScanned))
 
@@ -230,6 +232,7 @@ func transform(items []map[string]types.AttributeValue, rawOutput bool) ([]map[s
 			return out, transformErr
 		}
 		out = append(out, items...)
+		return out, nil
 	}
 
 	data, err := json.Marshal(items)
