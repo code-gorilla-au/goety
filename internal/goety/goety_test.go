@@ -226,7 +226,7 @@ func TestService_Dump(t *testing.T) {
 
 			odize.AssertEqual(t, 1, callScanAll)
 			odize.AssertEqual(t, 1, callWriteFile)
-		}, odize.Only()).
+		}).
 		Test("should return error if scan fails", func(t *testing.T) {
 			expectedErr := errors.New("scan all error")
 			client.ScanFunc = func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
