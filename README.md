@@ -122,7 +122,7 @@ goety purge --table <table-name> --partition-key <partition-key> --sort-key <sor
 
 ### Dry run
 
-The dry run flag does not perform purge, it logs what items will be deleted to standard out.
+The dry run flag does not perform purge; it logs what items will be deleted to standard out.
 
 ```bash
 # short flags
