@@ -8,10 +8,6 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
-
-env:
-  GOLANG_VERSION: 1.22
-
 jobs:
 
   scans:
@@ -35,10 +31,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup golang ${{ env.GOLANG_VERSION }}
+      - name: Setup golang
         uses: actions/setup-go@v4
         with:
-          go-version: ${{ env.GOLANG_VERSION }}
+          go-version-file: go.mod
 
       - name: install tools
         run: make install-ci
