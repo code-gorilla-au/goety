@@ -1,5 +1,7 @@
 ---
 name: cli pull request pipeline.
+permissions:
+  contents: read
 
 on:
   push:
