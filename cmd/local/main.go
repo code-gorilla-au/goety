@@ -20,19 +20,19 @@ func main() {
 
 	logger := logging.New(false)
 	ctx := context.Background()
-	config := loadConfig()
+	appConfig := loadConfig()
 	itemsToSeed := 1000
 
-	logger.Info("loading dynamodb client", "config", config)
+	logger.Info("loading dynamodb client", "appConfig", appConfig)
 
-	db, err := dbClient(config)
+	db, err := dbClient(appConfig)
 	if err != nil {
 		logger.Error("could not load client")
 		os.Exit(1)
 	}
 
-	logger.Info("creating table", "table", config.TableName)
-	if err := createTable(ctx, db, config); err != nil {
+	logger.Info("creating table", "table", appConfig.TableName)
+	if err := createTable(ctx, db, appConfig); err != nil {
 		if !strings.Contains(err.Error(), "ResourceInUseException") {
 			logger.Error("could not create table", "error", err)
 			os.Exit(1)
@@ -41,10 +41,10 @@ func main() {
 		logger.Info("table already exists")
 	}
 
-	logger.Info("seeding table", "table", config.TableName, "count", itemsToSeed)
+	logger.Info("seeding table", "table", appConfig.TableName, "count", itemsToSeed)
 	now := time.Now()
 
-	_ = seedTable(db, config, 1000)
+	_ = seedTable(db, appConfig, 1000)
 
 	since := time.Since(now).Seconds()
 	logger.Info("seed complete", "duration", since)
