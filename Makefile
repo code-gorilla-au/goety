@@ -46,7 +46,7 @@ install-ci: tools-scan ## install tools for CI only
 build: ## build go files
 	go build $(GO_BUILD_FLAGS) -o $(APP_NAME)
 
-install: tools-all infra-install ## install golang / node dependencies
+install: tools-all ## install golang / node dependencies
 
 
 generate: ## run go generation tools
