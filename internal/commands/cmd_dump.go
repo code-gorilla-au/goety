@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/code-gorilla-au/goety/internal/dynamodb"
 	"github.com/code-gorilla-au/goety/internal/emitter"
@@ -69,10 +69,14 @@ func dumpFunc(cmd *cobra.Command, args []string) {
 		log.Info("dry run enabled, no file will be created")
 		writer = &bytes.Buffer{}
 	} else {
+		if err := os.MkdirAll(filepath.Dir(flagDumpFilePath), 0750); err != nil {
+			log.Error("error creating directory", "error", err)
+			os.Exit(1)
+		}
 		file, err := os.Create(flagDumpFilePath)
 		if err != nil {
-			fmt.Println("Error creating file:", err)
-			return
+			log.Error("error creating file", "error", err)
+			os.Exit(1)
 		}
 		defer file.Close()
 		writer = file
