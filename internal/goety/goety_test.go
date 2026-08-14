@@ -1,9 +1,10 @@
 package goety
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -116,16 +117,11 @@ func TestService_Purge(t *testing.T) {
 }
 
 type mockWriter struct {
-	writeFunc       func(p []byte) (n int, err error)
-	writeStringFunc func(s string) (n int, err error)
+	writeFunc func(p []byte) (n int, err error)
 }
 
 func (m *mockWriter) Write(p []byte) (n int, err error) {
 	return m.writeFunc(p)
-}
-
-func (m *mockWriter) WriteString(s string) (n int, err error) {
-	return m.writeStringFunc(s)
 }
 
 func TestService_Dump(t *testing.T) {
@@ -136,8 +132,6 @@ func TestService_Dump(t *testing.T) {
 	ctx := logging.WithContext(context.Background(), logger)
 
 	callScanAll := 0
-	callWrite := 0
-	callWriteString := 0
 
 	group := odize.NewGroup(t, nil)
 
@@ -159,12 +153,7 @@ func TestService_Dump(t *testing.T) {
 
 		writer = mockWriter{
 			writeFunc: func(p []byte) (n int, err error) {
-				callWrite++
 				return len(p), nil
-			},
-			writeStringFunc: func(s string) (n int, err error) {
-				callWriteString++
-				return len(s), nil
 			},
 		}
 
@@ -180,8 +169,6 @@ func TestService_Dump(t *testing.T) {
 
 	group.AfterEach(func() {
 		callScanAll = 0
-		callWrite = 0
-		callWriteString = 0
 	})
 
 	err := group.
@@ -194,36 +181,92 @@ func TestService_Dump(t *testing.T) {
 		Test("should dump items on dry run", func(t *testing.T) {
 			service.dryRun = true
 
-			err := service.Dump(ctx, "my-table", &writer)
+			var buf bytes.Buffer
+			err := service.Dump(ctx, "my-table", &buf)
 			odize.AssertNoError(t, err)
 
 			odize.AssertEqual(t, 1, callScanAll)
-			odize.AssertEqual(t, 0, callWrite)
+			odize.AssertTrue(t, !bytes.Contains(buf.Bytes(), []byte("pk")))
 		}).
 		Test("should output", func(t *testing.T) {
-			writer.writeFunc = func(p []byte) (n int, err error) {
-				callWrite++
-				odize.AssertEqual(t, "{\"pk\":\"pk\",\"sk\":\"sk\"}\n", string(p))
-				return len(p), nil
-			}
-			err := service.Dump(ctx, "my-table", &writer)
+			var buf bytes.Buffer
+			err := service.Dump(ctx, "my-table", &buf)
 			odize.AssertNoError(t, err)
 
 			odize.AssertEqual(t, 1, callScanAll)
-			odize.AssertEqual(t, 1, callWrite)
+			var items []map[string]any
+			odize.AssertNoError(t, json.Unmarshal(buf.Bytes(), &items))
+			odize.AssertEqual(t, 1, len(items))
+			odize.AssertEqual(t, "pk", items[0]["pk"])
+			odize.AssertEqual(t, "sk", items[0]["sk"])
 		}).
 		Test("should output raw", func(t *testing.T) {
-			writer.writeFunc = func(p []byte) (n int, err error) {
-				callWrite++
-				odize.AssertEqual(t, "{\"pk\":{\"S\":\"pk\"},\"sk\":{\"S\":\"sk\"}}\n", string(p))
-				return len(p), nil
-			}
-
-			err := service.Dump(ctx, "my-table", &writer, WithRawOutput(true))
+			var buf bytes.Buffer
+			err := service.Dump(ctx, "my-table", &buf, WithRawOutput(true))
 			odize.AssertNoError(t, err)
 
 			odize.AssertEqual(t, 1, callScanAll)
-			odize.AssertEqual(t, 1, callWrite)
+			var items []map[string]any
+			odize.AssertNoError(t, json.Unmarshal(buf.Bytes(), &items))
+			odize.AssertEqual(t, 1, len(items))
+			odize.AssertEqual(t, "pk", items[0]["pk"].(map[string]any)["S"])
+			odize.AssertEqual(t, "sk", items[0]["sk"].(map[string]any)["S"])
+		}).
+		Test("should output items across multiple scan batches", func(t *testing.T) {
+			scanCall := 0
+			client.ScanFunc = func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
+				scanCall++
+				if scanCall == 1 {
+					return &dynamodb.ScanOutput{
+						Items: []map[string]types.AttributeValue{
+							{
+								"pk": &types.AttributeValueMemberS{Value: "pk1"},
+								"sk": &types.AttributeValueMemberS{Value: "sk1"},
+							},
+							{
+								"pk": &types.AttributeValueMemberS{Value: "pk2"},
+								"sk": &types.AttributeValueMemberS{Value: "sk2"},
+							},
+						},
+						LastEvaluatedKey: map[string]types.AttributeValue{
+							"pk": &types.AttributeValueMemberS{Value: "pk2"},
+						},
+					}, nil
+				}
+				return &dynamodb.ScanOutput{
+					Items: []map[string]types.AttributeValue{
+						{
+							"pk": &types.AttributeValueMemberS{Value: "pk3"},
+							"sk": &types.AttributeValueMemberS{Value: "sk3"},
+						},
+					},
+				}, nil
+			}
+
+			var buf bytes.Buffer
+			err := service.Dump(ctx, "my-table", &buf)
+			odize.AssertNoError(t, err)
+			odize.AssertEqual(t, 2, scanCall)
+
+			var items []map[string]any
+			odize.AssertNoError(t, json.Unmarshal(buf.Bytes(), &items))
+			odize.AssertEqual(t, 3, len(items))
+			odize.AssertEqual(t, "pk1", items[0]["pk"])
+			odize.AssertEqual(t, "pk2", items[1]["pk"])
+			odize.AssertEqual(t, "pk3", items[2]["pk"])
+		}).
+		Test("should output empty array when table has no items", func(t *testing.T) {
+			client.ScanFunc = func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
+				return &dynamodb.ScanOutput{}, nil
+			}
+
+			var buf bytes.Buffer
+			err := service.Dump(ctx, "my-table", &buf)
+			odize.AssertNoError(t, err)
+
+			var items []map[string]any
+			odize.AssertNoError(t, json.Unmarshal(buf.Bytes(), &items))
+			odize.AssertEqual(t, 0, len(items))
 		}).
 		Test("should return error if scan fails", func(t *testing.T) {
 			expectedErr := errors.New("scan all error")
@@ -241,7 +284,6 @@ func TestService_Dump(t *testing.T) {
 			}
 
 			err := service.Dump(ctx, "my-table", &writer)
-			fmt.Println("ooooo", err)
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
 		}).
 		Test("should dump items with attributes", func(t *testing.T) {
@@ -268,4 +310,56 @@ func TestService_Dump(t *testing.T) {
 
 	odize.AssertNoError(t, err)
 
+}
+
+func TestService_Seed(t *testing.T) {
+	var client DynamoClientMock
+	logger := logging.New(true)
+	ctx := logging.WithContext(context.Background(), logger)
+
+	group := odize.NewGroup(t, nil)
+
+	group.BeforeEach(func() {
+		client = DynamoClientMock{
+			PutFunc: func(ctx context.Context, input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
+				return &dynamodb.PutItemOutput{}, nil
+			},
+		}
+	})
+
+	err := group.
+		Test("should return error if file is not a json array", func(t *testing.T) {
+			service := Service{
+				client:  &client,
+				logger:  logger,
+				emitter: &mockEmitter{},
+			}
+
+			err := service.Seed(ctx, "my-table", bytes.NewReader([]byte(`{"a":1}`)))
+			odize.AssertTrue(t, err != nil)
+		}).
+		Test("should return error on invalid json", func(t *testing.T) {
+			service := Service{
+				client:  &client,
+				logger:  logger,
+				emitter: &mockEmitter{},
+			}
+
+			err := service.Seed(ctx, "my-table", bytes.NewReader([]byte(`not json`)))
+			odize.AssertTrue(t, err != nil)
+		}).
+		Test("should seed items", func(t *testing.T) {
+			service := Service{
+				client:  &client,
+				logger:  logger,
+				emitter: &mockEmitter{},
+			}
+
+			err := service.Seed(ctx, "my-table", bytes.NewReader([]byte(`[{"pk":"pk","sk":"sk"}]`)))
+			odize.AssertNoError(t, err)
+			odize.AssertEqual(t, 1, len(client.PutCalls()))
+		}).
+		Run()
+
+	odize.AssertNoError(t, err)
 }

@@ -20,7 +20,6 @@ var _ DynamoClient = (*ddb.Client)(nil)
 
 type Writer interface {
 	io.Writer
-	io.StringWriter
 }
 
 type Emitter interface {

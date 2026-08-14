@@ -97,14 +97,14 @@ func (s Service) Dump(ctx context.Context, tableName string, writer Writer, opts
 	s.emitter.Publish(fmt.Sprintf("dumping table %s", tableName))
 
 	encoder := json.NewEncoder(writer)
-	_, err := writer.WriteString("[\n")
+	_, err := fmt.Fprint(writer, "[\n")
 	if err != nil {
 		s.logger.Error("Error writing to buffer:", "error", err)
 		return err
 	}
 
 	defer func() {
-		_, err := writer.WriteString("\n]")
+		_, err := fmt.Fprint(writer, "\n]")
 		if err != nil {
 			s.logger.Error("Error writing to buffer:", "error", err)
 			return
@@ -118,6 +118,8 @@ func (s Service) Dump(ctx context.Context, tableName string, writer Writer, opts
 	next := ddb.ScanIterator(ctx, s.client)
 
 	itemsScanned := 0
+
+	firstItem := true
 
 	for !done {
 		output, err, done = next(
@@ -143,20 +145,21 @@ func (s Service) Dump(ctx context.Context, tableName string, writer Writer, opts
 			return err
 		}
 
-		for i, item := range items {
+		for _, item := range items {
 			if s.dryRun {
 				s.logger.Debug("dry run enabled")
 				prettyPrint(item)
 				continue
 			}
 
-			if i > 0 || itemsScanned > 0 {
-				_, err = writer.WriteString(",\n")
+			if !firstItem {
+				_, err = fmt.Fprint(writer, ",\n")
 				if err != nil {
 					s.logger.Error("could not write to buffer", "error", err)
 					return err
 				}
 			}
+			firstItem = false
 
 			err = encoder.Encode(item)
 			if err != nil {
@@ -169,8 +172,6 @@ func (s Service) Dump(ctx context.Context, tableName string, writer Writer, opts
 		s.emitter.Publish(fmt.Sprintf("scanned %d items", itemsScanned))
 
 	}
-
-	s.emitter.Publish(fmt.Sprintf("scanned %d items", itemsScanned))
 
 	if s.dryRun {
 		s.logger.Debug("dry run enabled")
@@ -194,10 +195,15 @@ func (s Service) Seed(ctx context.Context, tableName string, reader io.Reader) e
 	s.emitter.Publish(fmt.Sprintf("putting items to table %s", tableName))
 
 	decoder := json.NewDecoder(reader)
-	_, err := decoder.Token()
+	token, err := decoder.Token()
 	if err != nil {
 		s.logger.Error("could not read starting token", "error", err)
 		return err
+	}
+
+	delim, ok := token.(json.Delim)
+	if !ok || delim != '[' {
+		return errors.New("expected top-level JSON array")
 	}
 
 	if s.dryRun {
