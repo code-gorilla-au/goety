@@ -6,7 +6,7 @@ import (
 	"log/slog"
 )
 
-// logger interface wrapper
+// Logger interface wrapper
 type Logger interface {
 	Debug(msg string, args ...any)
 	DebugContext(ctx context.Context, msg string, args ...any)

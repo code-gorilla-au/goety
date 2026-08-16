@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"time"
 
@@ -22,11 +23,10 @@ const (
 
 func New(client DynamoClient, logger *slog.Logger, emitter emitter.MessagePublisher, dryRun bool) Service {
 	return Service{
-		client:     client,
-		dryRun:     dryRun,
-		logger:     logger,
-		fileWriter: &WriteFile{},
-		emitter:    emitter,
+		client:  client,
+		dryRun:  dryRun,
+		logger:  logger,
+		emitter: emitter,
 	}
 }
 
@@ -93,19 +93,33 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 // Example:
 //
 //	Dump(ctx, "my-table", "path/to/file.json", []string{"attr1", "attr2"})
-func (s Service) Dump(ctx context.Context, tableName string, path string, opts ...QueryFuncOpts) error {
-	s.emitter.Publish(fmt.Sprintf("dumping table %s to file %s", tableName, path))
+func (s Service) Dump(ctx context.Context, tableName string, writer Writer, opts ...QueryFuncOpts) error {
+	s.emitter.Publish(fmt.Sprintf("dumping table %s", tableName))
+
+	encoder := json.NewEncoder(writer)
+	_, err := fmt.Fprint(writer, "[\n")
+	if err != nil {
+		s.logger.Error("Error writing to buffer:", "error", err)
+		return err
+	}
+
+	defer func() {
+		_, err := fmt.Fprint(writer, "\n]")
+		if err != nil {
+			s.logger.Error("Error writing to buffer:", "error", err)
+			return
+		}
+	}()
 
 	queryOpts := WithQueryOptions(opts)
 
 	done := false
-	var err error
 	var output *dynamodb.ScanOutput
 	next := ddb.ScanIterator(ctx, s.client)
 
-	result := []map[string]any{}
-
 	itemsScanned := 0
+
+	firstItem := true
 
 	for !done {
 		output, err, done = next(
@@ -131,33 +145,41 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 			return err
 		}
 
-		result = append(result, items...)
+		for _, item := range items {
+			if s.dryRun {
+				s.logger.Debug("dry run enabled")
+				prettyPrint(item)
+				continue
+			}
+
+			if !firstItem {
+				_, err = fmt.Fprint(writer, ",\n")
+				if err != nil {
+					s.logger.Error("could not write to buffer", "error", err)
+					return err
+				}
+			}
+			firstItem = false
+
+			err = encoder.Encode(item)
+			if err != nil {
+				s.logger.Error("could not encode items", "error", err)
+				return err
+			}
+		}
 
 		itemsScanned += len(items)
 		s.emitter.Publish(fmt.Sprintf("scanned %d items", itemsScanned))
 
 	}
 
-	s.emitter.Publish(fmt.Sprintf("scanned %d items", len(result)))
-
 	if s.dryRun {
 		s.logger.Debug("dry run enabled")
-		prettyPrint(result)
 		return nil
 	}
 
-	message := fmt.Sprintf("saving %d items to file ", len(result)) + path
+	message := fmt.Sprintf("saving %d items ", itemsScanned)
 	s.emitter.Publish(message)
-	data, marshalErr := json.Marshal(result)
-	if marshalErr != nil {
-		s.logger.Error("could not marshal items", "error", marshalErr)
-		return marshalErr
-	}
-
-	if fileErr := s.fileWriter.WriteFile(path, data, 0644); fileErr != nil {
-		s.logger.Error("could not write file", "error", fileErr)
-		return fileErr
-	}
 
 	s.emitter.Publish("dump complete")
 	s.logger.Info("dump complete", "items", itemsScanned)
@@ -169,30 +191,42 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 // Example:
 //
 //	Seed(ctx, "my-table", "path/to/file.json")
-func (s Service) Seed(ctx context.Context, tableName string, filePath string) error {
+func (s Service) Seed(ctx context.Context, tableName string, reader io.Reader) error {
 	s.emitter.Publish(fmt.Sprintf("putting items to table %s", tableName))
 
-	data, err := s.fileWriter.ReadFile(filePath)
+	decoder := json.NewDecoder(reader)
+	token, err := decoder.Token()
 	if err != nil {
-		s.logger.Error("could not read file", "error", err)
+		s.logger.Error("could not read starting token", "error", err)
 		return err
 	}
 
-	itemList := []map[string]any{}
-	if err := json.Unmarshal(data, &itemList); err != nil {
-		s.logger.Error("could not unmarshal file", "error", err)
-		return err
+	delim, ok := token.(json.Delim)
+	if !ok || delim != '[' {
+		return errors.New("expected top-level JSON array")
 	}
-
-	s.emitter.Publish(fmt.Sprintf("%d items to be loaded into table %s", len(itemList), tableName))
 
 	if s.dryRun {
 		s.logger.Debug("dry run enabled")
-		prettyPrint(itemList)
-		return nil
 	}
 
-	for _, item := range itemList {
+	itemCount := 0
+	for decoder.More() {
+		var item map[string]any
+		err = decoder.Decode(&item)
+		if err != nil {
+			s.logger.Error("could not decode item", "error", err)
+			return err
+		}
+
+		itemCount++
+
+		if s.dryRun {
+			s.logger.Debug("dry run enabled")
+			prettyPrint(item)
+			continue
+		}
+
 		payload, err := attributevalue.MarshalMap(item)
 		if err != nil {
 			s.logger.Error("could not marshal item", "error", err)
@@ -209,7 +243,7 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) er
 		}
 	}
 
-	s.emitter.Publish(fmt.Sprintf("seed complete with %d items inserted", len(itemList)))
+	s.emitter.Publish(fmt.Sprintf("seed complete with %d items inserted", itemCount))
 	return nil
 }
 
