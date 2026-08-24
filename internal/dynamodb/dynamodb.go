@@ -109,3 +109,37 @@ func (c *Client) BatchDeleteItems(ctx context.Context, tableName string, keys []
 	}
 	return output, err
 }
+
+// BatchWriteItems writes items in batches using DynamoDB BatchWriteItem API
+// Returns unprocessed items that need retry
+func (c *Client) BatchWriteItems(ctx context.Context, tableName string, items []map[string]types.AttributeValue) (*ddb.BatchWriteItemOutput, error) {
+	writeRequests := make([]types.WriteRequest, 0, len(items))
+
+	for _, item := range items {
+		c.logger.Debug("adding item to batch write", "item", JSONStringify(item))
+		writeRequests = append(writeRequests, types.WriteRequest{
+			PutRequest: &types.PutRequest{
+				Item: item,
+			},
+		})
+	}
+
+	input := ddb.BatchWriteItemInput{
+		RequestItems: map[string][]types.WriteRequest{
+			tableName: writeRequests,
+		},
+	}
+
+	if c.dryRun {
+		c.logger.Debug("dry run enabled, skipping batch write", "items", JSONStringify(input))
+		return &ddb.BatchWriteItemOutput{}, nil
+	}
+
+	output, err := c.db.BatchWriteItem(ctx, &input)
+	if err != nil {
+		c.logger.Error("could not batch write items", "error", err)
+		return output, err
+	}
+
+	return output, nil
+}

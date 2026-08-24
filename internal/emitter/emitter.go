@@ -1,6 +1,9 @@
 package emitter
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // Message event emitter struct
 type Message struct {
@@ -10,13 +13,27 @@ type Message struct {
 // New creates a new message emitter
 func New() *Message {
 	return &Message{
-		messages: make(chan string, 1),
+		messages: make(chan string, 10),
 	}
 }
 
-// Publish a message
+// Publish a message (non-blocking)
 func (e *Message) Publish(msg string) {
-	e.messages <- msg
+	select {
+	case e.messages <- msg:
+	default:
+		// Channel is full, drop the message
+	}
+}
+
+// PublishBlocking publishes a message and blocks until it's sent or timeout
+// Use this for critical messages that must be delivered
+func (e *Message) PublishBlocking(msg string) {
+	select {
+	case e.messages <- msg:
+	case <-time.After(500 * time.Millisecond):
+		// No consumer available, drop the message to prevent deadlock
+	}
 }
 
 // GetMessage returns a message from the channel
@@ -26,6 +43,17 @@ func (e *Message) GetMessage() (string, error) {
 		return "", fmt.Errorf("channel closed")
 	}
 	return msg, nil
+}
+
+// TryGetMessage tries to get a message without blocking
+// Returns empty string and false if no message available
+func (e *Message) TryGetMessage() (string, bool) {
+	select {
+	case msg := <-e.messages:
+		return msg, true
+	default:
+		return "", false
+	}
 }
 
 // Close the channel
