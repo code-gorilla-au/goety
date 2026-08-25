@@ -3,12 +3,15 @@ module github.com/code-gorilla-au/goety
 go 1.26.5
 
 require (
+	github.com/avast/retry-go/v4 v4.7.0
 	github.com/aws/aws-sdk-go-v2 v1.42.0
 	github.com/aws/aws-sdk-go-v2/config v1.32.26
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.49
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.59.1
 	github.com/code-gorilla-au/env v1.1.1
 	github.com/code-gorilla-au/odize v1.3.5
+	github.com/samber/lo v1.53.0
+	github.com/sourcegraph/conc v0.3.0
 	github.com/spf13/cobra v1.10.2
 )
 
@@ -30,4 +33,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
+	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/multierr v1.9.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 )

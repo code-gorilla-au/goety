@@ -14,6 +14,7 @@ type DynamoClient interface {
 	Put(ctx context.Context, input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
 	Scan(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error)
 	BatchDeleteItems(ctx context.Context, tableName string, keys []map[string]types.AttributeValue) (*dynamodb.BatchWriteItemOutput, error)
+	BatchWriteItems(ctx context.Context, tableName string, items []map[string]types.AttributeValue) (*dynamodb.BatchWriteItemOutput, error)
 }
 
 var _ DynamoClient = (*ddb.Client)(nil)

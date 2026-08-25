@@ -99,6 +99,11 @@ func extractAttrValue(value types.AttributeValue) (any, error) {
 	return returnVal, nil
 }
 
+// FlattenAttrMap - alias for FlattenAttrValue for convenience
+func FlattenAttrMap(data map[string]types.AttributeValue) (map[string]any, error) {
+	return FlattenAttrValue(data)
+}
+
 func ConvertAVValues(data []map[string]types.AttributeValue) ([]map[string]AVer, error) {
 	transformed := []map[string]AVer{}
 

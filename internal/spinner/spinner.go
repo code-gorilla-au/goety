@@ -42,6 +42,7 @@ func (s *Spinner) Start(msg string) {
 }
 
 // Stop the spinner and optionally, prints the message
+// If message is empty, prints the last received message
 func (s *Spinner) Stop(message string) {
 	s.cleanUp.Do(func() {
 		close(s.closer)
@@ -50,24 +51,29 @@ func (s *Spinner) Stop(message string) {
 
 		if message != "" {
 			fmt.Println(message)
+		} else {
+			// Print the last message received
+			s.mx.Lock()
+			lastMsg := s.message
+			s.mx.Unlock()
+			if lastMsg != "" {
+				fmt.Println(lastMsg)
+			}
 		}
 	})
 }
 
 // draw the spinner
 func (s *Spinner) draw(frameDuration time.Duration) {
-	output := ""
-
-	msg, err := s.emitter.GetMessage()
-	if err == nil {
-		s.mx.Lock()
-		s.message = msg
-		s.mx.Unlock()
-	}
-
 	for _, frame := range s.sprite {
+		// Check for new messages before each frame (non-blocking)
+		if msg, ok := s.emitter.TryGetMessage(); ok {
+			s.mx.Lock()
+			s.message = msg
+			s.mx.Unlock()
+		}
 
-		output = frame + "  " + s.message
+		output := frame + "  " + s.message
 		fmt.Print(output)
 
 		time.Sleep(frameDuration)
