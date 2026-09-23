@@ -7,19 +7,15 @@ import (
 )
 
 type Service struct {
-	logger     logging.Logger
-	dryRun     bool
-	client     DynamoClient
-	fileWriter fileReaderWriter
-	emitter    emitter.MessagePublisher
+	logger  logging.Logger
+	dryRun  bool
+	client  DynamoClient
+	emitter emitter.MessagePublisher
 }
 
 type TableKeys struct {
 	PartitionKey string
 	SortKey      string
-}
-
-type WriteFile struct {
 }
 
 type QueryOpts struct {
