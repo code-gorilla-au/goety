@@ -20,7 +20,7 @@ The SDK does **not** retry `BatchWriteItem.UnprocessedItems` — that response i
 
 ### Phase 1: CLI bootstrap and state cleanup
 
-- [ ] Delete `internal/logging/interfaces.go`; use `*slog.Logger` directly.
+- [x] Delete `internal/logging/interfaces.go`; use `*slog.Logger` directly.
 - [ ] Fix `internal/logging/logging.go`:
   - [ ] Remove package-level `baseLogger` mutation.
   - [ ] Make `New(verbose)` return a fresh `*slog.Logger` each call.

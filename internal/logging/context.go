@@ -21,6 +21,6 @@ func FromContext(ctx context.Context) *slog.Logger {
 }
 
 // WithContext - attaches logger to context
-func WithContext(ctx context.Context, logger Logger) context.Context {
+func WithContext(ctx context.Context, logger *slog.Logger) context.Context {
 	return context.WithValue(ctx, loggerContextKey{}, logger)
 }
