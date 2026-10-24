@@ -21,10 +21,10 @@ The SDK does **not** retry `BatchWriteItem.UnprocessedItems` — that response i
 ### Phase 1: CLI bootstrap and state cleanup
 
 - [x] Delete `internal/logging/interfaces.go`; use `*slog.Logger` directly.
-- [ ] Fix `internal/logging/logging.go`:
-  - [ ] Remove package-level `baseLogger` mutation.
-  - [ ] Make `New(verbose)` return a fresh `*slog.Logger` each call.
-  - [ ] Use `slog.Default()` only as a fallback, not as mutable state.
+- [x] Fix `internal/logging/logging.go`:
+  - [x] Remove package-level `baseLogger` mutation.
+  - [x] Make `New(verbose)` return a fresh `*slog.Logger` each call.
+  - [x] Use `slog.Default()` only as a fallback, not as mutable state.
 - [ ] Create `internal/commands/runner.go` with a thin shared runner that owns:
   - [ ] Building the logger from `flagRootVerbose`.
   - [ ] Building the DynamoDB client from `flagRootAwsRegion` + command-specific endpoint.

@@ -9,7 +9,7 @@ type loggerContextKey struct {
 }
 
 // FromContext - fetches the logger from the request context.
-// If no logger is found, returns the base logger.
+// If no logger is found, returns the default logger.
 func FromContext(ctx context.Context) *slog.Logger {
 	maybeLogger := ctx.Value(loggerContextKey{})
 
@@ -17,7 +17,7 @@ func FromContext(ctx context.Context) *slog.Logger {
 		return existingLogger
 	}
 
-	return baseLogger
+	return slog.Default()
 }
 
 // WithContext - attaches logger to context
