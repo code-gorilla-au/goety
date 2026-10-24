@@ -55,6 +55,59 @@ func (c *Client) Put(ctx context.Context, input *ddb.PutItemInput) (*ddb.PutItem
 	return c.db.PutItem(ctx, input)
 }
 
+// BatchWriteItems - writes items in a batch. Note, max size is 25 items within a batch.
+func (c *Client) BatchWriteItems(ctx context.Context, tableName string, items []map[string]types.AttributeValue) (*ddb.BatchWriteItemOutput, error) {
+	if len(items) == 0 {
+		return &ddb.BatchWriteItemOutput{}, nil
+	}
+
+	txnWrite := []types.WriteRequest{}
+
+	for _, item := range items {
+		c.logger.Debug("adding item to batch write", "item", JSONStringify(item))
+		txnWrite = append(txnWrite, types.WriteRequest{
+			PutRequest: &types.PutRequest{
+				Item: item,
+			},
+		})
+	}
+
+	input := ddb.BatchWriteItemInput{
+		RequestItems: map[string][]types.WriteRequest{
+			tableName: txnWrite,
+		},
+	}
+
+	if c.dryRun {
+		c.logger.Debug("dry run enabled, skipping batch write", "items", JSONStringify(input))
+		return &ddb.BatchWriteItemOutput{}, nil
+	}
+
+	output, err := c.db.BatchWriteItem(ctx, &input)
+	if err != nil {
+		c.logger.Error("could not batch write items", "error", err)
+		return output, err
+	}
+
+	unprocessedItems := output.UnprocessedItems
+
+	for len(unprocessedItems) > 0 {
+		unprocessedInput := ddb.BatchWriteItemInput{
+			RequestItems: unprocessedItems,
+		}
+
+		unprocessedOutput, err := c.db.BatchWriteItem(ctx, &unprocessedInput)
+		if err != nil {
+			c.logger.Error("could not batch write items", "error", err)
+			return unprocessedOutput, err
+		}
+
+		unprocessedItems = unprocessedOutput.UnprocessedItems
+	}
+
+	return output, err
+}
+
 // BatchDeleteItems - deletes items in a batch Note, max size is 25 items within a batch
 func (c *Client) BatchDeleteItems(ctx context.Context, tableName string, keys []map[string]types.AttributeValue) (*ddb.BatchWriteItemOutput, error) {
 	txnWrite := []types.WriteRequest{}

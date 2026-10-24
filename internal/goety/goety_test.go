@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -118,29 +119,44 @@ func TestService_Purge(t *testing.T) {
 
 }
 
-type mockWriteFile struct {
+type mockFileReadWriter struct {
 	createFunc func(filename string, perm fs.FileMode) (io.WriteCloser, error)
 	openFunc   func(filename string) (io.ReadCloser, error)
 }
 
-func (m *mockWriteFile) Create(name string, perm fs.FileMode) (io.WriteCloser, error) {
+func (m *mockFileReadWriter) Create(name string, perm fs.FileMode) (io.WriteCloser, error) {
 	return m.createFunc(name, perm)
 }
 
-func (m *mockWriteFile) Open(name string) (io.ReadCloser, error) {
+func (m *mockFileReadWriter) Open(name string) (io.ReadCloser, error) {
 	return m.openFunc(name)
 }
 
 type mockWriteCloser struct {
 	bytes.Buffer
+	writeErr error
+}
+
+func (m *mockWriteCloser) Write(p []byte) (int, error) {
+	if m.writeErr != nil {
+		return 0, m.writeErr
+	}
+	return m.Buffer.Write(p)
 }
 
 func (m *mockWriteCloser) Close() error { return nil }
 
+type mockReadCloser struct {
+	*bytes.Buffer
+	closeErr error
+}
+
+func (m *mockReadCloser) Close() error { return m.closeErr }
+
 func TestService_Dump(t *testing.T) {
 	var client DynamoClientMock
 	var service Service
-	var fileWriter mockWriteFile
+	var fileReadWriter mockFileReadWriter
 	logger := logging.New(true)
 	ctx := logging.WithContext(context.Background(), logger)
 
@@ -165,7 +181,7 @@ func TestService_Dump(t *testing.T) {
 			},
 		}
 
-		fileWriter = mockWriteFile{
+		fileReadWriter = mockFileReadWriter{
 			createFunc: func(filename string, perm fs.FileMode) (io.WriteCloser, error) {
 				fmt.Println("creating file", filename)
 				callWriteFile++
@@ -177,7 +193,7 @@ func TestService_Dump(t *testing.T) {
 			client:           &client,
 			dryRun:           false,
 			logger:           logger,
-			fileReaderWriter: &fileWriter,
+			fileReaderWriter: &fileReadWriter,
 			emitter: &mockEmitter{
 				publishFunc: func(message string) {},
 			},
@@ -207,7 +223,7 @@ func TestService_Dump(t *testing.T) {
 		}).
 		Test("should output", func(t *testing.T) {
 			var buf mockWriteCloser
-			fileWriter = mockWriteFile{
+			fileReadWriter = mockFileReadWriter{
 				createFunc: func(filename string, perm fs.FileMode) (io.WriteCloser, error) {
 					callWriteFile++
 					return &buf, nil
@@ -223,7 +239,7 @@ func TestService_Dump(t *testing.T) {
 		}).
 		Test("should output raw", func(t *testing.T) {
 			var buf mockWriteCloser
-			fileWriter = mockWriteFile{
+			fileReadWriter = mockFileReadWriter{
 				createFunc: func(filename string, perm fs.FileMode) (io.WriteCloser, error) {
 					callWriteFile++
 					return &buf, nil
@@ -246,14 +262,22 @@ func TestService_Dump(t *testing.T) {
 			err := service.Dump(ctx, "my-table", "path")
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
 		}).
-		Test("should return error if file write fails", func(t *testing.T) {
+		Test("should return error if create file fails", func(t *testing.T) {
 			expectedErr := errors.New("write file error")
-			fileWriter.createFunc = func(filename string, perm fs.FileMode) (io.WriteCloser, error) {
+			fileReadWriter.createFunc = func(filename string, perm fs.FileMode) (io.WriteCloser, error) {
 				return nil, expectedErr
 			}
 
 			err := service.Dump(ctx, "my-table", "path")
-			fmt.Println("ooooo", err)
+			odize.AssertTrue(t, errors.Is(err, expectedErr))
+		}).
+		Test("should return error if writing items fails", func(t *testing.T) {
+			expectedErr := errors.New("write error")
+			fileReadWriter.createFunc = func(filename string, perm fs.FileMode) (io.WriteCloser, error) {
+				return &mockWriteCloser{writeErr: expectedErr}, nil
+			}
+
+			err := service.Dump(ctx, "my-table", "path")
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
 		}).
 		Test("should dump items with attributes", func(t *testing.T) {
@@ -280,4 +304,129 @@ func TestService_Dump(t *testing.T) {
 
 	odize.AssertNoError(t, err)
 
+}
+
+func TestService_Seed(t *testing.T) {
+	var client DynamoClientMock
+	var service Service
+	var fileReadWriter mockFileReadWriter
+	logger := logging.New(true)
+	ctx := logging.WithContext(context.Background(), logger)
+
+	callOpen := 0
+	callBatchWrite := 0
+
+	group := odize.NewGroup(t, nil)
+
+	group.BeforeEach(func() {
+		callOpen = 0
+		callBatchWrite = 0
+
+		client = DynamoClientMock{
+			BatchWriteItemsFunc: func(ctx context.Context, tableName string, items []map[string]types.AttributeValue) (*dynamodb.BatchWriteItemOutput, error) {
+				callBatchWrite++
+				return &dynamodb.BatchWriteItemOutput{}, nil
+			},
+		}
+
+		fileReadWriter = mockFileReadWriter{
+			openFunc: func(filename string) (io.ReadCloser, error) {
+				callOpen++
+				return &mockReadCloser{Buffer: bytes.NewBufferString(`[{"pk":"pk","sk":"sk"}]`)}, nil
+			},
+		}
+
+		service = Service{
+			client:           &client,
+			dryRun:           false,
+			logger:           logger,
+			fileReaderWriter: &fileReadWriter,
+			emitter: &mockEmitter{
+				publishFunc: func(message string) {},
+			},
+		}
+	})
+
+	group.AfterEach(func() {
+		callOpen = 0
+		callBatchWrite = 0
+	})
+
+	err := group.
+		Test("should seed items", func(t *testing.T) {
+			err := service.Seed(ctx, "my-table", "path")
+			odize.AssertNoError(t, err)
+
+			odize.AssertEqual(t, 1, callOpen)
+			odize.AssertEqual(t, 1, callBatchWrite)
+		}).
+		Test("should not batch write on dry run", func(t *testing.T) {
+			service.dryRun = true
+
+			err := service.Seed(ctx, "my-table", "path")
+			odize.AssertNoError(t, err)
+
+			odize.AssertEqual(t, 1, callOpen)
+			odize.AssertEqual(t, 0, callBatchWrite)
+		}).
+		Test("should return error if open fails", func(t *testing.T) {
+			expectedErr := errors.New("open error")
+			fileReadWriter.openFunc = func(filename string) (io.ReadCloser, error) {
+				return nil, expectedErr
+			}
+
+			err := service.Seed(ctx, "my-table", "path")
+			odize.AssertTrue(t, errors.Is(err, expectedErr))
+		}).
+		Test("should return error if decode fails", func(t *testing.T) {
+			fileReadWriter.openFunc = func(filename string) (io.ReadCloser, error) {
+				return &mockReadCloser{Buffer: bytes.NewBufferString(`not json`)}, nil
+			}
+
+			err := service.Seed(ctx, "my-table", "path")
+			odize.AssertTrue(t, err != nil)
+		}).
+		Test("should return error if batch write fails", func(t *testing.T) {
+			expectedErr := errors.New("batch write error")
+			client.BatchWriteItemsFunc = func(ctx context.Context, tableName string, items []map[string]types.AttributeValue) (*dynamodb.BatchWriteItemOutput, error) {
+				return nil, expectedErr
+			}
+
+			err := service.Seed(ctx, "my-table", "path")
+			odize.AssertTrue(t, errors.Is(err, expectedErr))
+		}).
+		Test("should batch items into groups of 25", func(t *testing.T) {
+			var sb strings.Builder
+			sb.WriteString("[")
+			for i := 0; i < 30; i++ {
+				if i > 0 {
+					sb.WriteString(",")
+				}
+				fmt.Fprintf(&sb, `{"pk":"item","idx":%d}`, i)
+			}
+			sb.WriteString("]")
+
+			fileReadWriter.openFunc = func(filename string) (io.ReadCloser, error) {
+				return &mockReadCloser{Buffer: bytes.NewBufferString(sb.String())}, nil
+			}
+
+			callCount := 0
+			client.BatchWriteItemsFunc = func(ctx context.Context, tableName string, items []map[string]types.AttributeValue) (*dynamodb.BatchWriteItemOutput, error) {
+				callCount++
+				if callCount == 1 && len(items) != 25 {
+					t.Fatalf("expected first batch of 25, got %d", len(items))
+				}
+				if callCount == 2 && len(items) != 5 {
+					t.Fatalf("expected second batch of 5, got %d", len(items))
+				}
+				return &dynamodb.BatchWriteItemOutput{}, nil
+			}
+
+			err := service.Seed(ctx, "my-table", "path")
+			odize.AssertNoError(t, err)
+			odize.AssertEqual(t, 2, callCount)
+		}).
+		Run()
+
+	odize.AssertNoError(t, err)
 }
