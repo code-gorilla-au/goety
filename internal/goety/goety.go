@@ -1,10 +1,12 @@
 package goety
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"time"
 
@@ -22,11 +24,11 @@ const (
 
 func New(client DynamoClient, logger *slog.Logger, emitter emitter.MessagePublisher, dryRun bool) Service {
 	return Service{
-		client:     client,
-		dryRun:     dryRun,
-		logger:     logger,
-		fileWriter: &WriteFile{},
-		emitter:    emitter,
+		client:           client,
+		dryRun:           dryRun,
+		logger:           logger,
+		fileReaderWriter: &WriteFile{},
+		emitter:          emitter,
 	}
 }
 
@@ -154,7 +156,20 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 		return marshalErr
 	}
 
-	if fileErr := s.fileWriter.WriteFile(path, data, 0644); fileErr != nil {
+	w, fileErr := s.fileReaderWriter.Create(path, 0644)
+	if fileErr != nil {
+		s.logger.Error("could not create file", "error", fileErr)
+		return fileErr
+	}
+
+	defer func(w io.WriteCloser) {
+		err = w.Close()
+		if err != nil {
+			s.logger.Error("could not close", "error", err)
+		}
+	}(w)
+
+	if _, fileErr = io.Copy(w, bytes.NewReader(data)); fileErr != nil {
 		s.logger.Error("could not write file", "error", fileErr)
 		return fileErr
 	}
@@ -172,7 +187,20 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 func (s Service) Seed(ctx context.Context, tableName string, filePath string) error {
 	s.emitter.Publish(fmt.Sprintf("putting items to table %s", tableName))
 
-	data, err := s.fileWriter.ReadFile(filePath)
+	r, err := s.fileReaderWriter.Open(filePath)
+	if err != nil {
+		s.logger.Error("could not open file", "error", err)
+		return err
+	}
+
+	defer func(r io.ReadCloser) {
+		err = r.Close()
+		if err != nil {
+			s.logger.Error("could not close file", "error", err)
+		}
+	}(r)
+
+	data, err := io.ReadAll(r)
 	if err != nil {
 		s.logger.Error("could not read file", "error", err)
 		return err

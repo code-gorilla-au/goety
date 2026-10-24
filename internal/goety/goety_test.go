@@ -1,9 +1,11 @@
 package goety
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"testing"
 
@@ -117,17 +119,23 @@ func TestService_Purge(t *testing.T) {
 }
 
 type mockWriteFile struct {
-	writeFileFunc func(filename string, data []byte) error
-	readFileFunc  func(filename string) ([]byte, error)
+	createFunc func(filename string, perm fs.FileMode) (io.WriteCloser, error)
+	openFunc   func(filename string) (io.ReadCloser, error)
 }
 
-func (m *mockWriteFile) WriteFile(name string, data []byte, perm fs.FileMode) error {
-	return m.writeFileFunc(name, data)
+func (m *mockWriteFile) Create(name string, perm fs.FileMode) (io.WriteCloser, error) {
+	return m.createFunc(name, perm)
 }
 
-func (m *mockWriteFile) ReadFile(name string) ([]byte, error) {
-	return m.readFileFunc(name)
+func (m *mockWriteFile) Open(name string) (io.ReadCloser, error) {
+	return m.openFunc(name)
 }
+
+type mockWriteCloser struct {
+	bytes.Buffer
+}
+
+func (m *mockWriteCloser) Close() error { return nil }
 
 func TestService_Dump(t *testing.T) {
 	var client DynamoClientMock
@@ -158,18 +166,18 @@ func TestService_Dump(t *testing.T) {
 		}
 
 		fileWriter = mockWriteFile{
-			writeFileFunc: func(filename string, data []byte) error {
-				fmt.Println("writing file", string(data))
+			createFunc: func(filename string, perm fs.FileMode) (io.WriteCloser, error) {
+				fmt.Println("creating file", filename)
 				callWriteFile++
-				return nil
+				return &mockWriteCloser{}, nil
 			},
 		}
 
 		service = Service{
-			client:     &client,
-			dryRun:     false,
-			logger:     logger,
-			fileWriter: &fileWriter,
+			client:           &client,
+			dryRun:           false,
+			logger:           logger,
+			fileReaderWriter: &fileWriter,
 			emitter: &mockEmitter{
 				publishFunc: func(message string) {},
 			},
@@ -198,11 +206,11 @@ func TestService_Dump(t *testing.T) {
 			odize.AssertEqual(t, 0, callWriteFile)
 		}).
 		Test("should output", func(t *testing.T) {
+			var buf mockWriteCloser
 			fileWriter = mockWriteFile{
-				writeFileFunc: func(filename string, data []byte) error {
+				createFunc: func(filename string, perm fs.FileMode) (io.WriteCloser, error) {
 					callWriteFile++
-					odize.AssertEqual(t, "[{\"pk\":\"pk\",\"sk\":\"sk\"}]", string(data))
-					return nil
+					return &buf, nil
 				},
 			}
 
@@ -211,13 +219,14 @@ func TestService_Dump(t *testing.T) {
 
 			odize.AssertEqual(t, 1, callScanAll)
 			odize.AssertEqual(t, 1, callWriteFile)
+			odize.AssertEqual(t, "[{\"pk\":\"pk\",\"sk\":\"sk\"}]", buf.String())
 		}).
 		Test("should output raw", func(t *testing.T) {
+			var buf mockWriteCloser
 			fileWriter = mockWriteFile{
-				writeFileFunc: func(filename string, data []byte) error {
+				createFunc: func(filename string, perm fs.FileMode) (io.WriteCloser, error) {
 					callWriteFile++
-					odize.AssertEqual(t, `[{"pk":{"S":"pk"},"sk":{"S":"sk"}}]`, string(data))
-					return nil
+					return &buf, nil
 				},
 			}
 
@@ -226,6 +235,7 @@ func TestService_Dump(t *testing.T) {
 
 			odize.AssertEqual(t, 1, callScanAll)
 			odize.AssertEqual(t, 1, callWriteFile)
+			odize.AssertEqual(t, `[{"pk":{"S":"pk"},"sk":{"S":"sk"}}]`, buf.String())
 		}).
 		Test("should return error if scan fails", func(t *testing.T) {
 			expectedErr := errors.New("scan all error")
@@ -238,8 +248,8 @@ func TestService_Dump(t *testing.T) {
 		}).
 		Test("should return error if file write fails", func(t *testing.T) {
 			expectedErr := errors.New("write file error")
-			fileWriter.writeFileFunc = func(filename string, data []byte) error {
-				return expectedErr
+			fileWriter.createFunc = func(filename string, perm fs.FileMode) (io.WriteCloser, error) {
+				return nil, expectedErr
 			}
 
 			err := service.Dump(ctx, "my-table", "path")
