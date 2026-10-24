@@ -6,17 +6,21 @@ on:
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - name: Release
-        uses: codfish/semantic-release-action@v3.0.0
+        uses: actions/checkout@v7
         with:
-          plugins: |
-            [ '@semantic-release/github' ]
+          fetch-depth: 0
+      - name: Release
+        uses: cycjimmy/semantic-release-action@v6
+        with:
+          extra_plugins: |
+            @semantic-release/github
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
