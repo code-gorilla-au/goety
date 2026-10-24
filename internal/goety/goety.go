@@ -278,8 +278,8 @@ func (s Service) openDumpFile(path string) (io.WriteCloser, error) {
 
 	if _, err = w.Write([]byte("[")); err != nil {
 		s.logger.Error("could not write file", "error", err)
-		if cerr := w.Close(); cerr != nil {
-			s.logger.Error("could not close file", "error", cerr)
+		if cErr := w.Close(); cErr != nil {
+			s.logger.Error("could not close file", "error", cErr)
 		}
 		return nil, err
 	}

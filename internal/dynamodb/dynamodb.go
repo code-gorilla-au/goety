@@ -59,24 +59,30 @@ func (c *Client) Put(ctx context.Context, input *ddb.PutItemInput) (*ddb.PutItem
 // BatchWriteItems - writes items in a batch. Note, max size is 25 items within a batch.
 func (c *Client) BatchWriteItems(ctx context.Context, tableName string, items []map[string]types.AttributeValue) (*ddb.BatchWriteItemOutput, error) {
 	requests := make([]types.WriteRequest, 0, len(items))
+
 	for _, item := range items {
 		c.logger.Debug("adding item to batch write", "item", JSONStringify(item))
+
 		requests = append(requests, types.WriteRequest{
 			PutRequest: &types.PutRequest{Item: item},
 		})
 	}
+
 	return c.batchWriteItem(ctx, tableName, requests, "write")
 }
 
 // BatchDeleteItems - deletes items in a batch. Note, max size is 25 items within a batch.
 func (c *Client) BatchDeleteItems(ctx context.Context, tableName string, keys []map[string]types.AttributeValue) (*ddb.BatchWriteItemOutput, error) {
 	requests := make([]types.WriteRequest, 0, len(keys))
+
 	for _, key := range keys {
 		c.logger.Debug("adding key to batch delete", "key", JSONStringify(key))
+
 		requests = append(requests, types.WriteRequest{
 			DeleteRequest: &types.DeleteRequest{Key: key},
 		})
 	}
+
 	return c.batchWriteItem(ctx, tableName, requests, "delete")
 }
 
@@ -101,13 +107,16 @@ func (c *Client) batchWriteItem(ctx context.Context, tableName string, requests 
 	}
 
 	unprocessedItems := output.UnprocessedItems
+
 	for len(unprocessedItems) > 0 {
 		unprocessedInput := ddb.BatchWriteItemInput{RequestItems: unprocessedItems}
-		unprocessedOutput, err := c.db.BatchWriteItem(ctx, &unprocessedInput)
-		if err != nil {
-			c.logger.Error(fmt.Sprintf("could not batch %s items", op), "error", err)
-			return unprocessedOutput, err
+
+		unprocessedOutput, uErr := c.db.BatchWriteItem(ctx, &unprocessedInput)
+		if uErr != nil {
+			c.logger.Error(fmt.Sprintf("could not batch %s items", op), "error", uErr)
+			return unprocessedOutput, uErr
 		}
+
 		unprocessedItems = unprocessedOutput.UnprocessedItems
 	}
 
