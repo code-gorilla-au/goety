@@ -1,13 +1,14 @@
 package goety
 
 import (
+	"log/slog"
+
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/code-gorilla-au/goety/internal/emitter"
-	"github.com/code-gorilla-au/goety/internal/logging"
 )
 
 type Service struct {
-	logger           logging.Logger
+	logger           *slog.Logger
 	dryRun           bool
 	client           DynamoClient
 	fileReaderWriter FileReadWriter

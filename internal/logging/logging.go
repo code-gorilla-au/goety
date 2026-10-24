@@ -5,23 +5,13 @@ import (
 	"os"
 )
 
-var baseLogger *slog.Logger
-
-func init() {
-	baseLogger = logger(slog.LevelInfo).With(ParamApp, AppName)
-}
-
 func New(verbose bool) *slog.Logger {
-	if baseLogger == nil {
-		// should not occur
-		baseLogger = slog.Default()
-	}
-
+	level := slog.LevelInfo
 	if verbose {
-		baseLogger = logger(slog.LevelDebug)
+		level = slog.LevelDebug
 	}
 
-	return baseLogger
+	return logger(level).With(ParamApp, AppName)
 }
 
 func logger(level slog.Level) *slog.Logger {
