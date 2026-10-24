@@ -2,6 +2,7 @@ package dynamodb
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	ddb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -55,57 +56,69 @@ func (c *Client) Put(ctx context.Context, input *ddb.PutItemInput) (*ddb.PutItem
 	return c.db.PutItem(ctx, input)
 }
 
-// BatchDeleteItems - deletes items in a batch Note, max size is 25 items within a batch
-func (c *Client) BatchDeleteItems(ctx context.Context, tableName string, keys []map[string]types.AttributeValue) (*ddb.BatchWriteItemOutput, error) {
-	txnWrite := []types.WriteRequest{}
+// BatchWriteItems - writes items in a batch. Note, max size is 25 items within a batch.
+func (c *Client) BatchWriteItems(ctx context.Context, tableName string, items []map[string]types.AttributeValue) (*ddb.BatchWriteItemOutput, error) {
+	requests := make([]types.WriteRequest, 0, len(items))
 
-	for _, key := range keys {
-		c.logger.Debug("adding key to batch delete", "key", JSONStringify(key))
-		txnWrite = append(txnWrite, types.WriteRequest{
-			DeleteRequest: &types.DeleteRequest{
-				Key: key,
-			},
+	for _, item := range items {
+		c.logger.Debug("adding item to batch write", "item", JSONStringify(item))
+
+		requests = append(requests, types.WriteRequest{
+			PutRequest: &types.PutRequest{Item: item},
 		})
 	}
 
+	return c.batchWriteItem(ctx, tableName, requests, "write")
+}
+
+// BatchDeleteItems - deletes items in a batch. Note, max size is 25 items within a batch.
+func (c *Client) BatchDeleteItems(ctx context.Context, tableName string, keys []map[string]types.AttributeValue) (*ddb.BatchWriteItemOutput, error) {
+	requests := make([]types.WriteRequest, 0, len(keys))
+
+	for _, key := range keys {
+		c.logger.Debug("adding key to batch delete", "key", JSONStringify(key))
+
+		requests = append(requests, types.WriteRequest{
+			DeleteRequest: &types.DeleteRequest{Key: key},
+		})
+	}
+
+	return c.batchWriteItem(ctx, tableName, requests, "delete")
+}
+
+func (c *Client) batchWriteItem(ctx context.Context, tableName string, requests []types.WriteRequest, op string) (*ddb.BatchWriteItemOutput, error) {
+	if len(requests) == 0 {
+		return &ddb.BatchWriteItemOutput{}, nil
+	}
+
 	input := ddb.BatchWriteItemInput{
-		RequestItems: map[string][]types.WriteRequest{
-			tableName: txnWrite,
-		},
+		RequestItems: map[string][]types.WriteRequest{tableName: requests},
 	}
 
 	if c.dryRun {
-		c.logger.Debug("dry run enabled, skipping batch delete", "items", JSONStringify(input))
+		c.logger.Debug(fmt.Sprintf("dry run enabled, skipping batch %s", op), "items", JSONStringify(input))
 		return &ddb.BatchWriteItemOutput{}, nil
 	}
 
 	output, err := c.db.BatchWriteItem(ctx, &input)
 	if err != nil {
-		c.logger.Error("could not batch delete items", "error", err)
+		c.logger.Error(fmt.Sprintf("could not batch %s items", op), "error", err)
 		return output, err
 	}
-
-	if output.UnprocessedItems == nil {
-		c.logger.Debug("batch delete complete")
-		return output, nil
-	}
-
-	c.logger.Debug("unprocessed items detected, processing")
 
 	unprocessedItems := output.UnprocessedItems
 
 	for len(unprocessedItems) > 0 {
-		unprocessedInput := ddb.BatchWriteItemInput{
-			RequestItems: unprocessedItems,
-		}
+		unprocessedInput := ddb.BatchWriteItemInput{RequestItems: unprocessedItems}
 
-		unprocessedOutput, err := c.db.BatchWriteItem(ctx, &unprocessedInput)
-		if err != nil {
-			c.logger.Error("could not batch delete items", "error", err)
-			return unprocessedOutput, err
+		unprocessedOutput, uErr := c.db.BatchWriteItem(ctx, &unprocessedInput)
+		if uErr != nil {
+			c.logger.Error(fmt.Sprintf("could not batch %s items", op), "error", uErr)
+			return unprocessedOutput, uErr
 		}
 
 		unprocessedItems = unprocessedOutput.UnprocessedItems
 	}
-	return output, err
+
+	return output, nil
 }

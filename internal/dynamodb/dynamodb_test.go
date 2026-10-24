@@ -157,3 +157,96 @@ func TestClient_BatchDeleteItems(t *testing.T) {
 
 	odize.AssertNoError(t, err)
 }
+
+func TestClient_BatchWriteItems(t *testing.T) {
+	logger := logging.New(true)
+	ctx := logging.WithContext(context.Background(), logger)
+	var client Client
+	var db ddbClientMock
+
+	batchWrite := 0
+
+	group := odize.NewGroup(t, nil)
+	group.BeforeEach(func() {
+		db = ddbClientMock{
+			BatchWriteItemFunc: func(ctx context.Context, params *dynamodb.BatchWriteItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.BatchWriteItemOutput, error) {
+				batchWrite++
+
+				if batchWrite == 1 {
+					return &dynamodb.BatchWriteItemOutput{
+						UnprocessedItems: map[string][]types.WriteRequest{
+							"key": {
+								{
+									PutRequest: &types.PutRequest{
+										Item: map[string]types.AttributeValue{
+											"key": &types.AttributeValueMemberS{Value: "value"},
+										},
+									},
+								},
+							},
+						},
+					}, nil
+				}
+
+				return &dynamodb.BatchWriteItemOutput{}, nil
+			},
+		}
+
+		client = Client{
+			logger: logger,
+			db:     &db,
+		}
+	})
+
+	group.AfterEach(func() {
+		batchWrite = 0
+	})
+
+	err := group.
+		Test("should not make db call on dry run", func(t *testing.T) {
+			client.dryRun = true
+
+			input := []map[string]types.AttributeValue{
+				{
+					"key": &types.AttributeValueMemberS{Value: "value"},
+				},
+			}
+			_, err := client.BatchWriteItems(ctx, "table", input)
+			odize.AssertNoError(t, err)
+
+			odize.AssertEqual(t, 0, batchWrite)
+		}).
+		Test("should run twice for unprocessed", func(t *testing.T) {
+			input := []map[string]types.AttributeValue{
+				{
+					"key": &types.AttributeValueMemberS{Value: "value"},
+				},
+			}
+			_, err := client.BatchWriteItems(ctx, "table", input)
+			odize.AssertNoError(t, err)
+
+			odize.AssertEqual(t, 2, batchWrite)
+		}).
+		Test("should return error on db error", func(t *testing.T) {
+			db.BatchWriteItemFunc = func(ctx context.Context, params *dynamodb.BatchWriteItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.BatchWriteItemOutput, error) {
+				return &dynamodb.BatchWriteItemOutput{}, errors.ErrUnsupported
+			}
+
+			input := []map[string]types.AttributeValue{
+				{
+					"key": &types.AttributeValueMemberS{Value: "value"},
+				},
+			}
+			_, err := client.BatchWriteItems(ctx, "table", input)
+			odize.AssertError(t, err)
+		}).
+		Test("should return empty result for empty input", func(t *testing.T) {
+			output, err := client.BatchWriteItems(ctx, "table", nil)
+			odize.AssertNoError(t, err)
+			odize.AssertEqual(t, 0, len(output.UnprocessedItems))
+			odize.AssertEqual(t, 0, batchWrite)
+		}).
+		Run()
+
+	odize.AssertNoError(t, err)
+}

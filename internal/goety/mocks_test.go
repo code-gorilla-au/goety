@@ -23,6 +23,9 @@ var _ DynamoClient = &DynamoClientMock{}
 //			BatchDeleteItemsFunc: func(ctx context.Context, tableName string, keys []map[string]types.AttributeValue) (*dynamodb.BatchWriteItemOutput, error) {
 //				panic("mock out the BatchDeleteItems method")
 //			},
+//			BatchWriteItemsFunc: func(ctx context.Context, tableName string, items []map[string]types.AttributeValue) (*dynamodb.BatchWriteItemOutput, error) {
+//				panic("mock out the BatchWriteItems method")
+//			},
 //			PutFunc: func(ctx context.Context, input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
 //				panic("mock out the Put method")
 //			},
@@ -38,6 +41,9 @@ var _ DynamoClient = &DynamoClientMock{}
 type DynamoClientMock struct {
 	// BatchDeleteItemsFunc mocks the BatchDeleteItems method.
 	BatchDeleteItemsFunc func(ctx context.Context, tableName string, keys []map[string]types.AttributeValue) (*dynamodb.BatchWriteItemOutput, error)
+
+	// BatchWriteItemsFunc mocks the BatchWriteItems method.
+	BatchWriteItemsFunc func(ctx context.Context, tableName string, items []map[string]types.AttributeValue) (*dynamodb.BatchWriteItemOutput, error)
 
 	// PutFunc mocks the Put method.
 	PutFunc func(ctx context.Context, input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
@@ -56,6 +62,15 @@ type DynamoClientMock struct {
 			// Keys is the keys argument value.
 			Keys []map[string]types.AttributeValue
 		}
+		// BatchWriteItems holds details about calls to the BatchWriteItems method.
+		BatchWriteItems []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// TableName is the tableName argument value.
+			TableName string
+			// Items is the items argument value.
+			Items []map[string]types.AttributeValue
+		}
 		// Put holds details about calls to the Put method.
 		Put []struct {
 			// Ctx is the ctx argument value.
@@ -72,6 +87,7 @@ type DynamoClientMock struct {
 		}
 	}
 	lockBatchDeleteItems sync.RWMutex
+	lockBatchWriteItems  sync.RWMutex
 	lockPut              sync.RWMutex
 	lockScan             sync.RWMutex
 }
@@ -117,6 +133,50 @@ func (mock *DynamoClientMock) BatchDeleteItemsCalls() []struct {
 	mock.lockBatchDeleteItems.RLock()
 	calls = mock.calls.BatchDeleteItems
 	mock.lockBatchDeleteItems.RUnlock()
+	return calls
+}
+
+// BatchWriteItems calls BatchWriteItemsFunc.
+func (mock *DynamoClientMock) BatchWriteItems(ctx context.Context, tableName string, items []map[string]types.AttributeValue) (*dynamodb.BatchWriteItemOutput, error) {
+	callInfo := struct {
+		Ctx       context.Context
+		TableName string
+		Items     []map[string]types.AttributeValue
+	}{
+		Ctx:       ctx,
+		TableName: tableName,
+		Items:     items,
+	}
+	mock.lockBatchWriteItems.Lock()
+	mock.calls.BatchWriteItems = append(mock.calls.BatchWriteItems, callInfo)
+	mock.lockBatchWriteItems.Unlock()
+	if mock.BatchWriteItemsFunc == nil {
+		var (
+			batchWriteItemOutputOut *dynamodb.BatchWriteItemOutput
+			errOut                  error
+		)
+		return batchWriteItemOutputOut, errOut
+	}
+	return mock.BatchWriteItemsFunc(ctx, tableName, items)
+}
+
+// BatchWriteItemsCalls gets all the calls that were made to BatchWriteItems.
+// Check the length with:
+//
+//	len(mockedDynamoClient.BatchWriteItemsCalls())
+func (mock *DynamoClientMock) BatchWriteItemsCalls() []struct {
+	Ctx       context.Context
+	TableName string
+	Items     []map[string]types.AttributeValue
+} {
+	var calls []struct {
+		Ctx       context.Context
+		TableName string
+		Items     []map[string]types.AttributeValue
+	}
+	mock.lockBatchWriteItems.RLock()
+	calls = mock.calls.BatchWriteItems
+	mock.lockBatchWriteItems.RUnlock()
 	return calls
 }
 
