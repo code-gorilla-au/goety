@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/code-gorilla-au/goety/internal/dynamodb"
-	"github.com/code-gorilla-au/goety/internal/emitter"
 	"github.com/code-gorilla-au/goety/internal/goety"
 	"github.com/code-gorilla-au/goety/internal/logging"
 	"github.com/code-gorilla-au/goety/internal/spinner"
@@ -49,15 +48,15 @@ func seedFunc(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	msgEmitter := emitter.New()
-
-	goetyService := goety.New(dbClient, log, msgEmitter, flagRootDryRun)
-
+	var progress func(string)
 	if !flagRootVerbose {
-		spin := spinner.New(msgEmitter)
+		spin := spinner.New(os.Stderr)
 		spin.Start("")
 		defer spin.Stop("")
+		progress = spin.Update
 	}
+
+	goetyService := goety.New(dbClient, log, progress, flagRootDryRun)
 
 	if err = goetyService.Seed(ctx, flagSeedTableName, flagSeedFile); err != nil {
 		log.Error("error seeding table", "error", err)

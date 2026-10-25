@@ -32,7 +32,3 @@ type FileReadWriter interface {
 	FileReader
 	FileWriter
 }
-
-type Emitter interface {
-	Publish(msg string)
-}

@@ -4,7 +4,6 @@ import (
 	"log/slog"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/code-gorilla-au/goety/internal/emitter"
 )
 
 type Service struct {
@@ -12,7 +11,7 @@ type Service struct {
 	dryRun           bool
 	client           DynamoClient
 	fileReaderWriter FileReadWriter
-	emitter          emitter.MessagePublisher
+	progress         func(string)
 }
 
 type TableKeys struct {

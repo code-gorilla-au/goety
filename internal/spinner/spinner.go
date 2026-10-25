@@ -1,101 +1,108 @@
 package spinner
 
 import (
-	"fmt"
+	"io"
 	"sync"
 	"time"
-
-	"github.com/code-gorilla-au/goety/internal/emitter"
 )
 
 const defaultFrameDuration = 150 * time.Millisecond
 
+const (
+	clearLineSequence = "\r\x1b[2K"
+	messageSeparator  = "  "
+)
+
+// Spinner renders a single-line progress indicator to an io.Writer.
+//
+// Update only stores the latest message, so callers never block on terminal
+// I/O. The draw loop reads that message on every tick.
 type Spinner struct {
+	out           io.Writer
 	sprite        []string
 	frameDuration time.Duration
-	mx            sync.Mutex
-	message       string
-	closer        chan struct{}
-	cleanUp       sync.Once
-	emitter       emitter.MessageGetPublishCloser
+
+	mu      sync.Mutex
+	message string
+
+	done     chan struct{}
+	stopOnce sync.Once
+	finished sync.WaitGroup
 }
 
-// New creates a new spinner
-func New(emitter emitter.MessageGetPublishCloser) *Spinner {
+// New creates a spinner that writes to out. Use io.Discard to disable output
+// while keeping the same call sites.
+func New(out io.Writer) *Spinner {
 	return &Spinner{
+		out:           out,
 		sprite:        brailleDots,
-		mx:            sync.Mutex{},
-		closer:        make(chan struct{}, 1),
 		frameDuration: defaultFrameDuration,
-		emitter:       emitter,
+		done:          make(chan struct{}),
 	}
 }
 
-// Start the spinner with optional message
-func (s *Spinner) Start(msg string) {
-	s.UpdateMessage(msg)
+// Start begins drawing message and keeps redrawing it in the background.
+func (s *Spinner) Start(message string) {
+	s.Update(message)
 
-	go s.tick(func() {
-		s.draw(s.frameDuration)
-	})
-
+	s.finished.Add(1)
+	go s.draw()
 }
 
-// Stop the spinner and optionally, prints the message
+// Update records the message shown on the next frame. It does not block on
+// files, the terminal, or other goroutines.
+func (s *Spinner) Update(message string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.message = message
+}
+
+// Stop ends the draw loop, clears the line, and, when message is not empty,
+// prints it in place of the spinner. Stop is safe to call more than once.
 func (s *Spinner) Stop(message string) {
-	s.cleanUp.Do(func() {
-		close(s.closer)
-		s.emitter.Close()
-		clearLine()
+	s.stopOnce.Do(func() {
+		close(s.done)
+		s.finished.Wait()
+
+		s.write(clearLineSequence)
 
 		if message != "" {
-			fmt.Println(message)
+			s.write(message + "\n")
 		}
 	})
 }
 
-// draw the spinner
-func (s *Spinner) draw(frameDuration time.Duration) {
-	output := ""
+// draw renders frames until Stop closes done.
+func (s *Spinner) draw() {
+	defer s.finished.Done()
 
-	msg, err := s.emitter.GetMessage()
-	if err == nil {
-		s.mx.Lock()
-		s.message = msg
-		s.mx.Unlock()
-	}
+	ticker := time.NewTicker(s.frameDuration)
+	defer ticker.Stop()
 
-	for _, frame := range s.sprite {
+	for frame := 0; ; frame = (frame + 1) % len(s.sprite) {
+		s.render(frame)
 
-		output = frame + "  " + s.message
-		fmt.Print(output)
-
-		time.Sleep(frameDuration)
-		clearLine()
-	}
-}
-
-// tick is the lifecycle of the spinner. It runs until we receive a signal to stop.
-func (s *Spinner) tick(invokeFn func()) {
-	for { // run until we receive a signal to stop
 		select {
-		case <-s.closer:
+		case <-s.done:
 			return
-		default:
-			invokeFn()
-
+		case <-ticker.C:
 		}
 	}
 }
 
-// UpdateMessage updates the spinner message
-func (s *Spinner) UpdateMessage(msg string) {
-	s.emitter.Publish(msg)
+// render draws one frame followed by the current message, replacing whatever
+// was on the line before.
+func (s *Spinner) render(frame int) {
+	s.mu.Lock()
+	message := s.message
+	s.mu.Unlock()
+
+	s.write(clearLineSequence + s.sprite[frame] + messageSeparator + message)
 }
 
-// clearLine clears the current terminal line
-func clearLine() {
-	fmt.Printf("\033[2K")
-	fmt.Println()
-	fmt.Printf("\033[1A")
+// write renders text to the output. Write errors are ignored on purpose:
+// progress reporting is best-effort and must never fail the running command.
+func (s *Spinner) write(text string) {
+	_, _ = io.WriteString(s.out, text)
 }
