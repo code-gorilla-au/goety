@@ -14,21 +14,32 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	ddb "github.com/code-gorilla-au/goety/internal/dynamodb"
-	"github.com/code-gorilla-au/goety/internal/emitter"
 )
 
 const (
 	defaultBatchSize = 25
 )
 
-func New(client DynamoClient, logger *slog.Logger, emitter emitter.MessagePublisher, dryRun bool) Service {
+// New wires a Service. A nil progress callback is a no-op, so callers that
+// only care about results can omit it.
+func New(client DynamoClient, logger *slog.Logger, progress func(string), dryRun bool) Service {
 	return Service{
 		client:           client,
 		dryRun:           dryRun,
 		logger:           logger,
 		fileReaderWriter: &OSFile{},
-		emitter:          emitter,
+		progress:         progress,
 	}
+}
+
+// reportProgress forwards a status update to the configured callback. It never
+// blocks on I/O itself; a spinner callback only stores the latest message.
+func (s Service) reportProgress(message string) {
+	if s.progress == nil {
+		return
+	}
+
+	s.progress(message)
 }
 
 // Purge all items from the given table
@@ -37,7 +48,7 @@ func New(client DynamoClient, logger *slog.Logger, emitter emitter.MessagePublis
 //
 //	Purge(ctx, "my-table", TableKeys{ PartitionKey: "pk", SortKey: "sk" })
 func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) error {
-	s.emitter.Publish(fmt.Sprintf("scanning table %s for items to purge", tableName))
+	s.reportProgress(fmt.Sprintf("scanning table %s for items to purge", tableName))
 	now := time.Now()
 
 	done := false
@@ -79,13 +90,13 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 		}
 		deleted += len(out.Items)
 
-		s.emitter.Publish(fmt.Sprintf("deleted %d items", deleted))
+		s.reportProgress(fmt.Sprintf("deleted %d items", deleted))
 
 	}
 
 	since := time.Since(now)
 
-	s.emitter.Publish(fmt.Sprintf("purge complete, deleted %d items, time taken [%v]", deleted, since))
+	s.reportProgress(fmt.Sprintf("purge complete, deleted %d items, time taken [%v]", deleted, since))
 	return nil
 }
 
@@ -95,7 +106,7 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 //
 //	Dump(ctx, "my-table", "path/to/file.json", []string{"attr1", "attr2"})
 func (s Service) Dump(ctx context.Context, tableName string, path string, opts ...QueryFuncOpts) (err error) {
-	s.emitter.Publish(fmt.Sprintf("dumping table %s to file %s", tableName, path))
+	s.reportProgress(fmt.Sprintf("dumping table %s to file %s", tableName, path))
 
 	queryOpts := WithQueryOptions(opts)
 
@@ -156,7 +167,7 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 		}
 
 		itemsScanned += len(output.Items)
-		s.emitter.Publish(fmt.Sprintf("scanned %d items", itemsScanned))
+		s.reportProgress(fmt.Sprintf("scanned %d items", itemsScanned))
 	}
 
 	if s.dryRun {
@@ -170,7 +181,7 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 		return err
 	}
 
-	s.emitter.Publish(fmt.Sprintf("dump complete, saved %d items to %s", itemsScanned, path))
+	s.reportProgress(fmt.Sprintf("dump complete, saved %d items to %s", itemsScanned, path))
 	s.logger.Info("dump complete", "items", itemsScanned)
 	return nil
 }
@@ -181,7 +192,7 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 //
 //	Seed(ctx, "my-table", "path/to/file.json")
 func (s Service) Seed(ctx context.Context, tableName string, filePath string) (err error) {
-	s.emitter.Publish(fmt.Sprintf("putting items to table %s", tableName))
+	s.reportProgress(fmt.Sprintf("putting items to table %s", tableName))
 
 	r, err := s.fileReaderWriter.Open(filePath)
 	if err != nil {
@@ -242,7 +253,7 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 				return err
 			}
 			itemsLoaded += len(batch)
-			s.emitter.Publish(fmt.Sprintf("seeded %d items", itemsLoaded))
+			s.reportProgress(fmt.Sprintf("seeded %d items", itemsLoaded))
 			batch = batch[:0]
 		}
 	}
@@ -255,7 +266,7 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 		itemsLoaded += len(batch)
 	}
 
-	s.emitter.Publish(fmt.Sprintf("seed complete with %d items inserted", itemsLoaded))
+	s.reportProgress(fmt.Sprintf("seed complete with %d items inserted", itemsLoaded))
 	return nil
 }
 

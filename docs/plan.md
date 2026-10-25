@@ -47,19 +47,19 @@ The SDK does **not** retry `BatchWriteItem.UnprocessedItems` — that response i
 
 This must land first because the runner depends on it.
 
-- [ ] Delete `internal/emitter` (package, interfaces, tests).
-- [ ] Remove the unused `Emitter` interface from `internal/goety/interfaces.go`.
-- [ ] Give `goety.Service` a `progress func(string)` field instead of `emitter.MessagePublisher`.
-  - [ ] Add it to `New`; treat `nil` as a no-op so tests do not need a mock.
-  - [ ] Contract: `progress` only records the latest message. It must not block, read files, or write to the terminal on the caller's goroutine.
-- [ ] Rewrite `internal/spinner`:
-  - [ ] `New(w io.Writer)` so the spinner writes to stderr.
-  - [ ] Run a `time.Ticker` loop; read the latest message under a `sync.Mutex` each frame.
-  - [ ] `Update(msg)` stores the message under the mutex. No channel and no wake signal are needed; a ticker already redraws.
-  - [ ] `Start` launches the loop, `Stop` signals a `done` channel and clears the line.
-  - [ ] Expose an unexported frame-duration knob so tests do not sleep for real.
-- [ ] Delete `cmd/spinner`, which exists only to demo the emitter/spinner pair.
-- [ ] Replace every `s.emitter.Publish(...)` in `internal/goety/goety.go` with `s.progress(...)`.
+- [x] Delete `internal/emitter` (package, interfaces, tests).
+- [x] Remove the unused `Emitter` interface from `internal/goety/interfaces.go`.
+- [x] Give `goety.Service` a `progress func(string)` field instead of `emitter.MessagePublisher`.
+  - [x] Add it to `New`; treat `nil` as a no-op so tests do not need a mock.
+  - [x] Contract: `progress` only records the latest message. It must not block, read files, or write to the terminal on the caller's goroutine.
+- [x] Rewrite `internal/spinner`:
+  - [x] `New(w io.Writer)` so the spinner writes to stderr.
+  - [x] Run a `time.Ticker` loop; read the latest message under a `sync.Mutex` each frame.
+  - [x] `Update(msg)` stores the message under the mutex. No channel and no wake signal are needed; a ticker already redraws.
+  - [x] `Start` launches the loop, `Stop` signals a `done` channel and clears the line.
+  - [x] Expose an unexported frame-duration knob so tests do not sleep for real.
+- [x] Delete `cmd/spinner`, which exists only to demo the emitter/spinner pair.
+- [x] Replace every `s.emitter.Publish(...)` in `internal/goety/goety.go` with `s.reportProgress(...)`, a nil-safe wrapper around the progress callback.
 - **Files affected:** `internal/emitter/*`, `internal/spinner/*`, `internal/goety/*`, `cmd/spinner/*`
 
 ### Phase 2: CLI runner and error handling

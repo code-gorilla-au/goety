@@ -16,12 +16,6 @@ import (
 	"github.com/code-gorilla-au/odize"
 )
 
-type mockEmitter struct {
-	publishFunc func(message string)
-}
-
-func (m *mockEmitter) Publish(message string) {}
-
 func TestService_Purge(t *testing.T) {
 	var client DynamoClientMock
 	var service Service
@@ -57,9 +51,6 @@ func TestService_Purge(t *testing.T) {
 			client: &client,
 			dryRun: false,
 			logger: logger,
-			emitter: &mockEmitter{
-				publishFunc: func(message string) {},
-			},
 		}
 	})
 
@@ -112,6 +103,26 @@ func TestService_Purge(t *testing.T) {
 			err := service.Purge(ctx, "my-table", TableKeys{PartitionKey: "pk", SortKey: "sk"})
 			odize.AssertNoError(t, err)
 			odize.AssertEqual(t, 0, callBatchDelete)
+		}).
+		Test("should report progress", func(t *testing.T) {
+			var messages []string
+			service.progress = func(message string) {
+				messages = append(messages, message)
+			}
+
+			err := service.Purge(ctx, "my-table", TableKeys{PartitionKey: "pk", SortKey: "sk"})
+			odize.AssertNoError(t, err)
+
+			odize.AssertEqual(t, 3, len(messages))
+			odize.AssertEqual(t, "scanning table my-table for items to purge", messages[0])
+			odize.AssertEqual(t, "deleted 1 items", messages[1])
+			odize.AssertTrue(t, strings.HasPrefix(messages[2], "purge complete, deleted 1 items, time taken ["))
+		}).
+		Test("should work without a progress callback", func(t *testing.T) {
+			service.progress = nil
+
+			err := service.Purge(ctx, "my-table", TableKeys{PartitionKey: "pk", SortKey: "sk"})
+			odize.AssertNoError(t, err)
 		}).
 		Run()
 
@@ -194,9 +205,6 @@ func TestService_Dump(t *testing.T) {
 			dryRun:           false,
 			logger:           logger,
 			fileReaderWriter: &fileReadWriter,
-			emitter: &mockEmitter{
-				publishFunc: func(message string) {},
-			},
 		}
 	})
 
@@ -341,9 +349,6 @@ func TestService_Seed(t *testing.T) {
 			dryRun:           false,
 			logger:           logger,
 			fileReaderWriter: &fileReadWriter,
-			emitter: &mockEmitter{
-				publishFunc: func(message string) {},
-			},
 		}
 	})
 
