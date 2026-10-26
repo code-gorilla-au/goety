@@ -19,7 +19,6 @@ func bootstrap(cmd *cobra.Command, endpoint string, action CmdActionFunc) error 
 
 	dbClient, err := dynamodb.NewClient(ctx, flagRootAwsRegion, endpoint)
 	if err != nil {
-		log.Error("could not load client")
 		return err
 	}
 
