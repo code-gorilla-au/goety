@@ -31,3 +31,4 @@ test.json
 fixed-agreements.json
 
 .idea
+e2e*.json

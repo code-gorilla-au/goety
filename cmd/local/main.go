@@ -38,13 +38,16 @@ func main() {
 			os.Exit(1)
 			return
 		}
+
 		logger.Info("table already exists")
 	}
 
 	logger.Info("seeding table", "table", appConfig.TableName, "count", itemsToSeed)
 	now := time.Now()
 
-	_ = seedTable(db, appConfig, 1000)
+	if err := seedTable(db, appConfig, 1000); err != nil {
+		logger.Error("error seeing table", "error", err)
+	}
 
 	since := time.Since(now).Seconds()
 	logger.Info("seed complete", "duration", since)
@@ -113,7 +116,7 @@ func createTable(ctx context.Context, db *dynamodb.Client, config Config) error 
 
 func seedTable(db *dynamodb.Client, config Config, items int) error {
 	var allErrs error
-	for i := 0; i < items; i++ {
+	for i := range items {
 		_, err := db.PutItem(context.Background(), &dynamodb.PutItemInput{
 			TableName: &config.TableName,
 			Item: map[string]types.AttributeValue{
@@ -125,5 +128,6 @@ func seedTable(db *dynamodb.Client, config Config, items int) error {
 			allErrs = errors.Join(allErrs, err)
 		}
 	}
+
 	return allErrs
 }
