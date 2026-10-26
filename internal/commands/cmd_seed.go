@@ -3,12 +3,8 @@ package commands
 import (
 	"context"
 	"errors"
-	"os"
 
-	"github.com/code-gorilla-au/goety/internal/dynamodb"
 	"github.com/code-gorilla-au/goety/internal/goety"
-	"github.com/code-gorilla-au/goety/internal/logging"
-	"github.com/code-gorilla-au/goety/internal/spinner"
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +18,7 @@ var seedCmd = &cobra.Command{
 	Use:   "seed -t [TABLE_NAME] -f [FILE_PATH]",
 	Short: "seed a dynamodb table from file",
 	Long:  "seed will read a json file and write the contents to a dynamodb table",
-	Run:   seedFunc,
+	RunE:  seedFunc,
 }
 
 func init() {
@@ -32,37 +28,18 @@ func init() {
 }
 
 // purgeFunc is the entry point for the purge command. It will purge a dynamodb table of all items
-func seedFunc(cmd *cobra.Command, args []string) {
-	log := logging.New(flagRootVerbose)
-	ctx := context.Background()
+func seedFunc(cmd *cobra.Command, args []string) error {
+	return bootstrap(cmd, flagSeedEndpoint, func(ctx context.Context, service goety.Service) error {
+		if err := parseSeedFlag(); err != nil {
+			return err
+		}
 
-	if err := parseSeedFlag(); err != nil {
-		log.Error("error parsing flags", "error", err)
-		os.Exit(1)
-	}
+		if err := service.Seed(ctx, flagSeedTableName, flagSeedFile); err != nil {
+			return err
+		}
 
-	log.Debug("loading dynamodb client")
-	dbClient, err := dynamodb.NewClient(ctx, flagRootAwsRegion, flagSeedEndpoint)
-	if err != nil {
-		log.Error("could not load client")
-		os.Exit(1)
-	}
-
-	var progress func(string)
-	if !flagRootVerbose {
-		spin := spinner.New(os.Stderr)
-		spin.Start("")
-		defer spin.Stop("")
-		progress = spin.Update
-	}
-
-	goetyService := goety.New(dbClient, log, progress, flagRootDryRun)
-
-	if err = goetyService.Seed(ctx, flagSeedTableName, flagSeedFile); err != nil {
-		log.Error("error seeding table", "error", err)
-		os.Exit(1)
-	}
-
+		return nil
+	})
 }
 
 // parsePurgeFlag will validate the flags passed to the purge command
