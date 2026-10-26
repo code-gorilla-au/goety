@@ -9,7 +9,7 @@ APP_NAME := $(shell basename `git rev-parse --show-toplevel`)
 AWS_REGION ?= ap-southeast-2
 GOOS ?= linux
 GOARCH ?= amd64
-CGO_ENABLED=0 
+CGO_ENABLED=0
 
 # Load env properties , db name, port, etc.
 # nb: You can change the default config with `make ENV_CONTEXT=".env.uat" `
@@ -25,6 +25,7 @@ MAKE_LIB:=$(PROJECT_ROOT)/scripts
 -include $(MAKE_LIB)/lints.mk
 -include $(MAKE_LIB)/logs.mk
 -include $(MAKE_LIB)/tools.mk
+-include $(MAKE_LIB)/e2e.mk
 
 
 
@@ -45,6 +46,9 @@ install-ci: tools-scan ## install tools for CI only
 
 build: ## build go files
 	go build $(GO_BUILD_FLAGS) -o $(APP_NAME)
+
+setup: ## Run setup tasks
+	cp .env.example .env.local
 
 install: tools-all ## install golang / node dependencies
 

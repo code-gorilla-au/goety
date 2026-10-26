@@ -5,7 +5,7 @@ services:
     container_name: goety-db
     user: root
     ports:
-      - "8100:8000"
+      - "8000:8000"
     volumes:
       - dynamo-data:/home/dynamodblocal/data
     working_dir: /home/dynamodblocal
