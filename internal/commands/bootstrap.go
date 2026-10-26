@@ -16,7 +16,7 @@ type CmdActionFunc = func(context.Context, goety.Service) error
 // bootstrap instantiate common dependencies for the commands and invokes the action
 func bootstrap(cmd *cobra.Command, endpoint string, action CmdActionFunc) error {
 	log := logging.New(flagRootVerbose)
-	ctx := context.Background()
+	ctx := cmd.Context()
 
 	dbClient, err := dynamodb.NewClient(ctx, flagRootAwsRegion, endpoint)
 	if err != nil {
@@ -34,7 +34,6 @@ func bootstrap(cmd *cobra.Command, endpoint string, action CmdActionFunc) error 
 	g := goety.New(dbClient, log, progress, flagRootDryRun)
 
 	if actionErr := action(ctx, g); actionErr != nil {
-		log.Error("error running action", "error", actionErr)
 		return actionErr
 	}
 

@@ -45,7 +45,7 @@ func dumpFunc(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		_ = service.Dump(
+		return service.Dump(
 			ctx,
 			flagDumpTableName,
 			flagDumpFilePath,
@@ -56,8 +56,6 @@ func dumpFunc(cmd *cobra.Command, args []string) error {
 			goety.WithFilterNameValues(flagDumpFilterAttrValue),
 			goety.WithRawOutput(flagDumpRawOutput),
 		)
-
-		return nil
 	})
 
 }
