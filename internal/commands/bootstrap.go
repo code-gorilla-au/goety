@@ -13,6 +13,7 @@ import (
 
 type CmdActionFunc = func(context.Context, goety.Service) error
 
+// bootstrap instantiate common dependencies for the commands and invokes the action
 func bootstrap(cmd *cobra.Command, endpoint string, action CmdActionFunc) error {
 	log := logging.New(flagRootVerbose)
 	ctx := context.Background()
@@ -25,8 +26,8 @@ func bootstrap(cmd *cobra.Command, endpoint string, action CmdActionFunc) error 
 	var progress func(string)
 	if !flagRootVerbose {
 		spin := spinner.New(os.Stderr)
-		spin.Start("starting dump")
-		defer spin.Stop("dump complete")
+		spin.Start("starting")
+		defer spin.Stop("complete")
 		progress = spin.Update
 	}
 

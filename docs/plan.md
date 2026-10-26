@@ -64,7 +64,7 @@ This must land first because the runner depends on it.
 
 ### Phase 2: CLI runner and error handling
 
-- [ ] Create `internal/commands/runner.go` with one helper, for example:
+- [ ] Create `../internal/commands/bootstrap.go` with one helper, for example:
 
   ```go
   func run(cmd *cobra.Command, endpoint string, action func(context.Context, goety.Service) error) error

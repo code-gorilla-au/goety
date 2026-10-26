@@ -3,12 +3,8 @@ package commands
 import (
 	"context"
 	"errors"
-	"os"
 
-	"github.com/code-gorilla-au/goety/internal/dynamodb"
 	"github.com/code-gorilla-au/goety/internal/goety"
-	"github.com/code-gorilla-au/goety/internal/logging"
-	"github.com/code-gorilla-au/goety/internal/spinner"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +19,7 @@ var purgeCmd = &cobra.Command{
 	Use:   "purge -t [TABLE_NAME] -p [PARTITION_KEY] -s [SORT_KEY]",
 	Short: "purge a dynamodb table of all items",
 	Long:  "purge will scan all items within a dynamodb table and use a batch delete to remove all records",
-	Run:   purgeFunc,
+	RunE:  purgeFunc,
 }
 
 func init() {
@@ -34,39 +30,18 @@ func init() {
 }
 
 // purgeFunc is the entry point for the purge command. It will purge a dynamodb table of all items
-func purgeFunc(cmd *cobra.Command, args []string) {
-	log := logging.New(flagRootVerbose)
-	ctx := context.Background()
+func purgeFunc(cmd *cobra.Command, args []string) error {
+	return bootstrap(cmd, flagPurgeEndpoint, func(ctx context.Context, service goety.Service) error {
 
-	if err := parsePurgeFlag(); err != nil {
-		log.Error("error parsing flags", "error", err)
-		os.Exit(1)
-	}
+		if err := parsePurgeFlag(); err != nil {
+			return err
+		}
 
-	log.Debug("loading dynamodb client")
-	dbClient, err := dynamodb.NewClient(ctx, flagRootAwsRegion, flagPurgeEndpoint)
-	if err != nil {
-		log.Error("could not load client")
-		os.Exit(1)
-	}
-
-	var progress func(string)
-	if !flagRootVerbose {
-		spin := spinner.New(os.Stderr)
-		spin.Start("starting purge")
-		defer spin.Stop("")
-		progress = spin.Update
-	}
-
-	goetyService := goety.New(dbClient, log, progress, flagRootDryRun)
-
-	if err = goetyService.Purge(ctx, flagPurgeTableName, goety.TableKeys{
-		PartitionKey: flagPurgePartitionKey,
-		SortKey:      flagPurgeSortKey,
-	}); err != nil {
-		log.Error("error purging table", "error", err)
-		os.Exit(1)
-	}
+		return service.Purge(ctx, flagPurgeTableName, goety.TableKeys{
+			PartitionKey: flagPurgePartitionKey,
+			SortKey:      flagPurgeSortKey,
+		})
+	})
 
 }
 
