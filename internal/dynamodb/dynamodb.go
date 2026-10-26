@@ -3,38 +3,28 @@ package dynamodb
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	ddb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/code-gorilla-au/goety/internal/logging"
 )
 
 // NewClient - creates a new opinionated dynamodb client
-func NewClient(ctx context.Context, region string, endpoint string) (*Client, error) {
-	ops := func(o *ddb.Options) {
+func NewClient(ctx context.Context, region string, endpoint string, logger *slog.Logger) (*Client, error) {
+	client := Client{logger: logger}
+
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return &client, fmt.Errorf("load AWS config: %w", err)
+	}
+
+	db := ddb.NewFromConfig(cfg, func(o *ddb.Options) {
 		o.Region = region
 		if endpoint != "" {
 			o.BaseEndpoint = &endpoint
 		}
-	}
-	return NewWith(ctx, func(lo *config.LoadOptions) error { return nil }, ops)
-}
-
-// NewWith - creates a new dynamodb client with exposed functional options.
-// Use this client if you wish to have flexibility with some of the more advanced options.
-func NewWith(ctx context.Context, configOpts func(*config.LoadOptions) error, dbOpts ...func(*ddb.Options)) (*Client, error) {
-
-	client := Client{
-		logger: logging.FromContext(ctx),
-	}
-
-	cfg, err := config.LoadDefaultConfig(ctx, configOpts)
-	if err != nil {
-		return &client, err
-	}
-
-	db := ddb.NewFromConfig(cfg, dbOpts...)
+	})
 	client.db = db
 
 	return &client, nil
@@ -44,8 +34,7 @@ func NewWith(ctx context.Context, configOpts func(*config.LoadOptions) error, db
 func (c *Client) Scan(ctx context.Context, input *ddb.ScanInput) (*ddb.ScanOutput, error) {
 	output, err := c.db.Scan(ctx, input)
 	if err != nil {
-		c.logger.Error("could not scan table", "error", err)
-		return output, err
+		return output, fmt.Errorf("scan table: %w", err)
 	}
 
 	return output, nil
@@ -102,8 +91,7 @@ func (c *Client) batchWriteItem(ctx context.Context, tableName string, requests 
 
 	output, err := c.db.BatchWriteItem(ctx, &input)
 	if err != nil {
-		c.logger.Error(fmt.Sprintf("could not batch %s items", op), "error", err)
-		return output, err
+		return output, fmt.Errorf("batch %s items: %w", op, err)
 	}
 
 	unprocessedItems := output.UnprocessedItems
@@ -113,8 +101,7 @@ func (c *Client) batchWriteItem(ctx context.Context, tableName string, requests 
 
 		unprocessedOutput, uErr := c.db.BatchWriteItem(ctx, &unprocessedInput)
 		if uErr != nil {
-			c.logger.Error(fmt.Sprintf("could not batch %s items", op), "error", uErr)
-			return unprocessedOutput, uErr
+			return unprocessedOutput, fmt.Errorf("batch %s items: %w", op, uErr)
 		}
 
 		unprocessedItems = unprocessedOutput.UnprocessedItems

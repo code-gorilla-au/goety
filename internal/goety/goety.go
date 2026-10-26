@@ -65,8 +65,7 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 			Limit:           aws.Int32(defaultBatchSize),
 		})
 		if err != nil {
-			s.logger.Error("could not scan table", "error", err)
-			return err
+			return fmt.Errorf("scan items for purge: %w", err)
 		}
 
 		if out == nil {
@@ -85,8 +84,7 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 
 		_, err = s.client.BatchDeleteItems(ctx, tableName, out.Items)
 		if err != nil {
-			s.logger.Error("could not batch delete items", "error", err)
-			return err
+			return fmt.Errorf("delete items for purge: %w", err)
 		}
 		deleted += len(out.Items)
 
@@ -125,9 +123,8 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 		}
 		defer func() {
 			if cerr := w.Close(); cerr != nil {
-				s.logger.Error("could not close file", "error", cerr)
 				if err == nil {
-					err = cerr
+					err = fmt.Errorf("close dump file: %w", cerr)
 				}
 			}
 		}()
@@ -144,8 +141,7 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 				ExpressionAttributeValues: queryOpts.FilterNameValues,
 			})
 		if err != nil && !errors.Is(err, ddb.ErrNoItems) {
-			s.logger.Error("could not scan table", "error", err)
-			return err
+			return fmt.Errorf("scan items for dump: %w", err)
 		}
 
 		if output == nil || len(output.Items) == 0 {
@@ -155,14 +151,12 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 		if s.dryRun {
 			items, transformErr := transformDumpOutput(output.Items, queryOpts.RawOutput)
 			if transformErr != nil {
-				s.logger.Error("could not transform items", "error", transformErr)
-				return transformErr
+				return fmt.Errorf("transform dump items: %w", transformErr)
 			}
 			dryRunResult = append(dryRunResult, items...)
 		} else {
 			if err = writeDumpItems(w, output.Items, queryOpts.RawOutput, &first); err != nil {
-				s.logger.Error("could not write items", "error", err)
-				return err
+				return fmt.Errorf("write dump items: %w", err)
 			}
 		}
 
@@ -177,8 +171,7 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 	}
 
 	if _, err = w.Write([]byte("]")); err != nil {
-		s.logger.Error("could not write file", "error", err)
-		return err
+		return fmt.Errorf("write closing bracket to dump file: %w", err)
 	}
 
 	s.reportProgress(fmt.Sprintf("dump complete, saved %d items to %s", itemsScanned, path))
@@ -196,15 +189,13 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 
 	r, err := s.fileReaderWriter.Open(filePath)
 	if err != nil {
-		s.logger.Error("could not open file", "error", err)
-		return err
+		return fmt.Errorf("open seed file: %w", err)
 	}
 
 	defer func() {
 		if cerr := r.Close(); cerr != nil {
-			s.logger.Error("could not close file", "error", cerr)
 			if err == nil {
-				err = cerr
+				err = fmt.Errorf("close seed file: %w", cerr)
 			}
 		}
 	}()
@@ -213,8 +204,7 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 
 	token, err := dec.Token()
 	if err != nil {
-		s.logger.Error("could not read file", "error", err)
-		return err
+		return fmt.Errorf("read seed file: %w", err)
 	}
 
 	delim, ok := token.(json.Delim)
@@ -228,8 +218,7 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 	for dec.More() {
 		var item map[string]any
 		if err := dec.Decode(&item); err != nil {
-			s.logger.Error("could not decode item", "error", err)
-			return err
+			return fmt.Errorf("decode seed item: %w", err)
 		}
 
 		if s.dryRun {
@@ -240,8 +229,7 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 
 		payload, err := attributevalue.MarshalMap(item)
 		if err != nil {
-			s.logger.Error("could not marshal item", "error", err)
-			return err
+			return fmt.Errorf("marshal seed item: %w", err)
 		}
 
 		s.logger.Debug("adding item to batch", "item", payload)
@@ -249,8 +237,7 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 
 		if len(batch) == defaultBatchSize {
 			if _, err := s.client.BatchWriteItems(ctx, tableName, batch); err != nil {
-				s.logger.Error("could not batch write items", "error", err)
-				return err
+				return fmt.Errorf("write seed items: %w", err)
 			}
 			itemsLoaded += len(batch)
 			s.reportProgress(fmt.Sprintf("seeded %d items", itemsLoaded))
@@ -260,8 +247,7 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 
 	if !s.dryRun && len(batch) > 0 {
 		if _, err := s.client.BatchWriteItems(ctx, tableName, batch); err != nil {
-			s.logger.Error("could not batch write items", "error", err)
-			return err
+			return fmt.Errorf("write seed items: %w", err)
 		}
 		itemsLoaded += len(batch)
 	}
@@ -283,16 +269,16 @@ func prettyPrint(v any) {
 func (s Service) openDumpFile(path string) (io.WriteCloser, error) {
 	w, err := s.fileReaderWriter.Create(path, 0644)
 	if err != nil {
-		s.logger.Error("could not create file", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("create dump file: %w", err)
 	}
 
 	if _, err = w.Write([]byte("[")); err != nil {
-		s.logger.Error("could not write file", "error", err)
-		if cErr := w.Close(); cErr != nil {
-			s.logger.Error("could not close file", "error", cErr)
+		cErr := w.Close()
+		if cErr != nil {
+			return nil, fmt.Errorf("error closing: %w", cErr)
 		}
-		return nil, err
+
+		return nil, fmt.Errorf("write opening bracket to dump file: %w", err)
 	}
 
 	return w, nil

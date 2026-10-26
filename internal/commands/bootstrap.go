@@ -18,7 +18,7 @@ func bootstrap(cmd *cobra.Command, endpoint string, action CmdActionFunc) error 
 	log := logging.New(flagRootVerbose)
 	ctx := cmd.Context()
 
-	dbClient, err := dynamodb.NewClient(ctx, flagRootAwsRegion, endpoint)
+	dbClient, err := dynamodb.NewClient(ctx, flagRootAwsRegion, endpoint, log)
 	if err != nil {
 		return err
 	}

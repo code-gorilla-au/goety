@@ -9,9 +9,10 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "goety [COMMAND] --[FLAGS]",
-	Short: "dynamodb power tools",
-	Long:  "Power tools to interact with dynamodb tables",
+	Use:          "goety [COMMAND] --[FLAGS]",
+	Short:        "dynamodb power tools",
+	Long:         "Power tools to interact with dynamodb tables",
+	SilenceUsage: true,
 }
 
 func init() {
