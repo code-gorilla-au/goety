@@ -143,3 +143,7 @@ goety purge -t <table-name> -p <partition-key> -s <sort-key> -v
 goety purge --table <table-name> --partition-key <partition-key> --sort-key <sort-key> --verbose
 
 ```
+
+## Development
+
+See [e2e](docs/e2e.md) doc for testing the binary end to end.
