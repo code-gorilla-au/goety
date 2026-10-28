@@ -67,7 +67,8 @@ The SDK does **not** retry `BatchWriteItem.UnprocessedItems` — that response i
 
 - [ ] Delete `AVer` / `AV*` (and the now-empty `internal/dynamodb/types.go`) and replace `ConvertAVValue` / `ConvertAVValues` with one recursive converter, for example `toDynamoJSON(types.AttributeValue) any`, that emits the DynamoDB JSON shape (`{"S": ...}`, `{"N": ...}`, `{"M": {...}}`, `{"L": [...]}`, and so on). This is required because the AWS types do not do it themselves.
 - [ ] Keep `FlattenAttrValue` / `FlattenAttrList` for normal output.
-- [ ] Optional: return `json.Number` for `N` instead of `float64`. This preserves large integers and makes flattening infallible, removing error plumbing. If taken, update the numeric tests.
+- [x] Optional: return `json.Number` for `N` instead of `float64`. This preserves large integers and makes flattening infallible, removing error plumbing. If taken, update the numeric tests.
+  - Done: large integers are preserved and the numeric tests are updated. The `error` return of `FlattenAttrValue` is still there (nested `M`/`L` plumbing remains), so the "infallible" simplification is not taken.
 - [ ] Replace the `first *bool` writer with a small array helper:
 
   ```go
@@ -78,11 +79,11 @@ The SDK does **not** retry `BatchWriteItem.UnprocessedItems` — that response i
 
   - [ ] Write `[` when the file opens and `]` when it closes.
   - [ ] Use `json.Marshal` per item; do **not** use `json.Encoder` unless newline-delimited output is acceptable.
-  - [ ] Ensure the closing `]` is written on error as well, or delete the partial file. A truncated JSON file is worse than no file.
+  - [x] Ensure the closing `]` is written on error as well, or delete the partial file. A truncated JSON file is worse than no file.
 - [ ] Remove `transformDumpOutput`; raw dry-run can collect `map[string]any` directly and marshal once.
-- [ ] For `--dry-run`, accumulate items for `Dump` and `Seed`, then pretty-print once. Do not print one JSON document per seeded item.
+- [x] For `--dry-run`, accumulate items for `Dump` and `Seed`, then pretty-print once. Do not print one JSON document per seeded item.
 - [ ] Make `prettyPrint` return an error instead of swallowing it, and write to an explicit `io.Writer`.
-- [ ] Wire `--limit` into `ScanInput.Limit` or remove the flag and its README entry. Recommendation: wire it; it is one line and the help text already promises it.
+- [x] Wire `--limit` into `ScanInput.Limit` or remove the flag and its README entry. Recommendation: wire it; it is one line and the help text already promises it.
 - [ ] Tests: extend the existing exact-output assertions rather than adding golden files.
   - [ ] Multiple items and multiple scan pages.
   - [ ] Raw output with nested `M`/`L` values.

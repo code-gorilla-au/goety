@@ -1,6 +1,7 @@
 package dynamodb
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -34,7 +35,7 @@ func Test_transformJSON(t *testing.T) {
 			p := d["pk"].(map[string]any)
 			odize.AssertEqual(t, "sk", p["sk"])
 		}).
-		Test("should return float", func(t *testing.T) {
+		Test("should return number", func(t *testing.T) {
 			example := map[string]types.AttributeValue{
 				"pk": &types.AttributeValueMemberM{Value: map[string]types.AttributeValue{
 					"number": &types.AttributeValueMemberN{Value: "100"},
@@ -45,7 +46,20 @@ func Test_transformJSON(t *testing.T) {
 			odize.AssertNoError(t, err)
 
 			p := d["pk"].(map[string]any)
-			odize.AssertEqual(t, float64(100), p["number"])
+			odize.AssertEqual(t, json.Number("100"), p["number"])
+		}).
+		Test("should preserve large integers", func(t *testing.T) {
+			example := map[string]types.AttributeValue{
+				"big": &types.AttributeValueMemberN{Value: "12345678901234567890"},
+				"dec": &types.AttributeValueMemberN{Value: "1.5"},
+			}
+
+			d, err := FlattenAttrValue(example)
+			odize.AssertNoError(t, err)
+
+			data, err := json.Marshal(d)
+			odize.AssertNoError(t, err)
+			odize.AssertEqual(t, `{"big":12345678901234567890,"dec":1.5}`, string(data))
 		}).
 		Test("should return null", func(t *testing.T) {
 			example := map[string]types.AttributeValue{
@@ -72,8 +86,8 @@ func Test_transformJSON(t *testing.T) {
 			odize.AssertNoError(t, err)
 
 			p := d["pk"].([]any)
-			odize.AssertEqual(t, float64(100), p[0])
-			odize.AssertEqual(t, float64(200), p[1])
+			odize.AssertEqual(t, json.Number("100"), p[0])
+			odize.AssertEqual(t, json.Number("200"), p[1])
 		}).
 		Run()
 	odize.AssertNoError(t, err)

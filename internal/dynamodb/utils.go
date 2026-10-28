@@ -2,7 +2,6 @@ package dynamodb
 
 import (
 	"encoding/json"
-	"strconv"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
@@ -56,11 +55,7 @@ func extractAttrValue(value types.AttributeValue) (any, error) {
 	case *types.AttributeValueMemberS:
 		returnVal = v.Value
 	case *types.AttributeValueMemberN:
-		parsed, err := strconv.ParseFloat(v.Value, 64)
-		if err != nil {
-			return nil, err
-		}
-		returnVal = parsed
+		returnVal = json.Number(v.Value)
 	case *types.AttributeValueMemberB:
 		returnVal = v.Value
 	case *types.AttributeValueMemberBOOL:
