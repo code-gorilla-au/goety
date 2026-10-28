@@ -101,18 +101,23 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 	var dryRunResult []map[string]any
 
 	var w io.WriteCloser
+	closed := false
+	closeDumpFile := func() {
+		if !closed {
+			_, _ = w.Write([]byte("]"))
+		}
+
+		if cerr := w.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close dump file: %w", cerr)
+		}
+	}
+
 	if !s.dryRun {
 		w, err = s.openDumpFile(path)
 		if err != nil {
 			return err
 		}
-		defer func() {
-			if cerr := w.Close(); cerr != nil {
-				if err == nil {
-					err = fmt.Errorf("close dump file: %w", cerr)
-				}
-			}
-		}()
+		defer closeDumpFile()
 	}
 
 	first := true
@@ -122,6 +127,7 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 		FilterExpression:          queryOpts.FilterExpression,
 		ExpressionAttributeNames:  queryOpts.FilterNameAttributes,
 		ExpressionAttributeValues: queryOpts.FilterNameValues,
+		Limit:                     queryOpts.Limit,
 	}
 
 	for output, scanErr := range ddb.ScanAll(ctx, s.client, scanInput) {
@@ -155,6 +161,7 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 		return nil
 	}
 
+	closed = true
 	if _, err = w.Write([]byte("]")); err != nil {
 		return fmt.Errorf("write closing bracket to dump file: %w", err)
 	}
@@ -198,6 +205,7 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 	}
 
 	itemsLoaded := 0
+	var dryRunItems []map[string]any
 	batch := make([]map[string]types.AttributeValue, 0, defaultBatchSize)
 
 	for dec.More() {
@@ -207,7 +215,7 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 		}
 
 		if s.dryRun {
-			prettyPrint(item)
+			dryRunItems = append(dryRunItems, item)
 			itemsLoaded++
 			continue
 		}
@@ -228,6 +236,10 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 			s.reportProgress(fmt.Sprintf("seeded %d items", itemsLoaded))
 			batch = batch[:0]
 		}
+	}
+
+	if s.dryRun {
+		prettyPrint(dryRunItems)
 	}
 
 	if !s.dryRun && len(batch) > 0 {

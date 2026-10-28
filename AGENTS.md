@@ -145,6 +145,7 @@ If a test needs any other internal mock, move the test to the external boundary 
 - `goety.Service` is the single owner of dry-run behavior; the DynamoDB adapter stays a thin wrapper.
 - Keep machine-readable output (`dump`, dry-run JSON) on stdout. Progress/UI belongs on stderr where the roadmap says so.
 - Follow the package layout and naming already present. Keep changes minimal and focused.
+- **No useless comments.** Write code that explains itself through clear names and small functions. A comment must say something the code cannot: a non-obvious *why*, a constraint, or a workaround. Never write comments that restate what the code does, narrate the change, or label obvious steps. If a comment can be removed by renaming something or extracting a function, do that instead. Doc comments are only for exported identifiers whose behavior is not clear from the name and signature.
 - Do not "clean up" unrelated code while implementing a feature.
 
 ## Missing commands

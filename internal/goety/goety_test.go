@@ -3,10 +3,12 @@ package goety
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"os"
 	"strings"
 	"testing"
 
@@ -159,6 +161,28 @@ func (m *mockWriteCloser) Write(p []byte) (int, error) {
 
 func (m *mockWriteCloser) Close() error { return nil }
 
+// captureStdout returns everything fn writes to os.Stdout.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	r, w, err := os.Pipe()
+	odize.AssertNoError(t, err)
+
+	orig := os.Stdout
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+
+	fn()
+
+	odize.AssertNoError(t, w.Close())
+	os.Stdout = orig
+
+	data, err := io.ReadAll(r)
+	odize.AssertNoError(t, err)
+
+	return string(data)
+}
+
 type mockReadCloser struct {
 	*bytes.Buffer
 	closeErr error
@@ -273,6 +297,38 @@ func TestService_Dump(t *testing.T) {
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
 			odize.AssertTrue(t, strings.HasPrefix(err.Error(), "scan items for dump:"))
 		}).
+		Test("should close the json array when a scan fails mid dump", func(t *testing.T) {
+			var buf mockWriteCloser
+			fileReadWriter.createFunc = func(filename string, perm fs.FileMode) (io.WriteCloser, error) {
+				return &buf, nil
+			}
+
+			expectedErr := errors.New("scan page error")
+			calls := 0
+			client.ScanFunc = func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
+				calls++
+				if calls == 2 {
+					return nil, expectedErr
+				}
+
+				return &dynamodb.ScanOutput{
+					Items: []map[string]types.AttributeValue{
+						{
+							"pk": &types.AttributeValueMemberS{Value: "pk"},
+							"sk": &types.AttributeValueMemberS{Value: "sk"},
+						},
+					},
+					LastEvaluatedKey: map[string]types.AttributeValue{
+						"pk": &types.AttributeValueMemberS{Value: "pk"},
+					},
+				}, nil
+			}
+
+			err := service.Dump(ctx, "my-table", "path")
+			odize.AssertTrue(t, errors.Is(err, expectedErr))
+			odize.AssertTrue(t, strings.HasPrefix(err.Error(), "scan items for dump:"))
+			odize.AssertEqual(t, "[{\"pk\":\"pk\",\"sk\":\"sk\"}]", buf.String())
+		}).
 		Test("should return error if create file fails", func(t *testing.T) {
 			expectedErr := errors.New("write file error")
 			fileReadWriter.createFunc = func(filename string, perm fs.FileMode) (io.WriteCloser, error) {
@@ -292,6 +348,31 @@ func TestService_Dump(t *testing.T) {
 			err := service.Dump(ctx, "my-table", "path")
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
 			odize.AssertTrue(t, strings.HasPrefix(err.Error(), "write opening bracket to dump file:"))
+		}).
+		Test("should pass the limit to the scan input", func(t *testing.T) {
+			var gotLimit *int32
+			client.ScanFunc = func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
+				gotLimit = input.Limit
+				return &dynamodb.ScanOutput{}, nil
+			}
+
+			err := service.Dump(ctx, "my-table", "path", WithLimit(10))
+			odize.AssertNoError(t, err)
+
+			odize.AssertTrue(t, gotLimit != nil)
+			odize.AssertEqual(t, int32(10), *gotLimit)
+		}).
+		Test("should not set a scan limit by default", func(t *testing.T) {
+			var gotLimit *int32
+			client.ScanFunc = func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
+				gotLimit = input.Limit
+				return &dynamodb.ScanOutput{}, nil
+			}
+
+			err := service.Dump(ctx, "my-table", "path")
+			odize.AssertNoError(t, err)
+
+			odize.AssertTrue(t, gotLimit == nil)
 		}).
 		Test("should dump items with attributes", func(t *testing.T) {
 			attrExp := []string{"attr1", "attr2"}
@@ -378,6 +459,24 @@ func TestService_Seed(t *testing.T) {
 
 			odize.AssertEqual(t, 1, callOpen)
 			odize.AssertEqual(t, 0, callBatchWrite)
+		}).
+		Test("should print dry run items as a single json array", func(t *testing.T) {
+			service.dryRun = true
+			fileReadWriter.openFunc = func(filename string) (io.ReadCloser, error) {
+				return &mockReadCloser{Buffer: bytes.NewBufferString(`[{"pk":"a"},{"pk":"b"}]`)}, nil
+			}
+
+			out := captureStdout(t, func() {
+				err := service.Seed(ctx, "my-table", "path")
+				odize.AssertNoError(t, err)
+			})
+
+			var items []map[string]any
+			err := json.Unmarshal([]byte(out), &items)
+			odize.AssertNoError(t, err)
+			odize.AssertEqual(t, 2, len(items))
+			odize.AssertEqual(t, "a", items[0]["pk"])
+			odize.AssertEqual(t, "b", items[1]["pk"])
 		}).
 		Test("should return error if open fails", func(t *testing.T) {
 			expectedErr := errors.New("open error")
