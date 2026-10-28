@@ -26,9 +26,6 @@ var _ DynamoClient = &DynamoClientMock{}
 //			BatchWriteItemsFunc: func(ctx context.Context, tableName string, items []map[string]types.AttributeValue) (*dynamodb.BatchWriteItemOutput, error) {
 //				panic("mock out the BatchWriteItems method")
 //			},
-//			PutFunc: func(ctx context.Context, input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
-//				panic("mock out the Put method")
-//			},
 //			ScanFunc: func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
 //				panic("mock out the Scan method")
 //			},
@@ -44,9 +41,6 @@ type DynamoClientMock struct {
 
 	// BatchWriteItemsFunc mocks the BatchWriteItems method.
 	BatchWriteItemsFunc func(ctx context.Context, tableName string, items []map[string]types.AttributeValue) (*dynamodb.BatchWriteItemOutput, error)
-
-	// PutFunc mocks the Put method.
-	PutFunc func(ctx context.Context, input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
 
 	// ScanFunc mocks the Scan method.
 	ScanFunc func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error)
@@ -71,13 +65,6 @@ type DynamoClientMock struct {
 			// Items is the items argument value.
 			Items []map[string]types.AttributeValue
 		}
-		// Put holds details about calls to the Put method.
-		Put []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Input is the input argument value.
-			Input *dynamodb.PutItemInput
-		}
 		// Scan holds details about calls to the Scan method.
 		Scan []struct {
 			// Ctx is the ctx argument value.
@@ -88,7 +75,6 @@ type DynamoClientMock struct {
 	}
 	lockBatchDeleteItems sync.RWMutex
 	lockBatchWriteItems  sync.RWMutex
-	lockPut              sync.RWMutex
 	lockScan             sync.RWMutex
 }
 
@@ -177,46 +163,6 @@ func (mock *DynamoClientMock) BatchWriteItemsCalls() []struct {
 	mock.lockBatchWriteItems.RLock()
 	calls = mock.calls.BatchWriteItems
 	mock.lockBatchWriteItems.RUnlock()
-	return calls
-}
-
-// Put calls PutFunc.
-func (mock *DynamoClientMock) Put(ctx context.Context, input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
-	callInfo := struct {
-		Ctx   context.Context
-		Input *dynamodb.PutItemInput
-	}{
-		Ctx:   ctx,
-		Input: input,
-	}
-	mock.lockPut.Lock()
-	mock.calls.Put = append(mock.calls.Put, callInfo)
-	mock.lockPut.Unlock()
-	if mock.PutFunc == nil {
-		var (
-			putItemOutputOut *dynamodb.PutItemOutput
-			errOut           error
-		)
-		return putItemOutputOut, errOut
-	}
-	return mock.PutFunc(ctx, input)
-}
-
-// PutCalls gets all the calls that were made to Put.
-// Check the length with:
-//
-//	len(mockedDynamoClient.PutCalls())
-func (mock *DynamoClientMock) PutCalls() []struct {
-	Ctx   context.Context
-	Input *dynamodb.PutItemInput
-} {
-	var calls []struct {
-		Ctx   context.Context
-		Input *dynamodb.PutItemInput
-	}
-	mock.lockPut.RLock()
-	calls = mock.calls.Put
-	mock.lockPut.RUnlock()
 	return calls
 }
 

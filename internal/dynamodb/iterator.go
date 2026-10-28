@@ -2,47 +2,40 @@ package dynamodb
 
 import (
 	"context"
+	"iter"
 
 	ddb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-// ScanIterator - Creates an iterator function for a DynamoDB scan function.
-// The iterator function will return the next page of results on each call, until there are no more results.
-// If the iterator is done, the output will be nil and, the last return value will be true.
+// ScanAll - iterates over every page of a DynamoDB scan. The caller's input is
+// not mutated. On a scan error it yields (nil, err) once and stops. Breaking out
+// of the range loop stops pagination.
 //
 // Example:
 //
-//	next := dynamodb.ScanIterator(ctx, scanner)
-//
-//	input := &ddb.ScanInput{
-//	    TableName: aws.String("my-table"),
+//	for out, err := range dynamodb.ScanAll(ctx, scanner, input) {
+//	    if err != nil { return err }
 //	}
-//
-//	output, err, done := next(input)
-func ScanIterator(ctx context.Context, scanner Scanner) func(input *ddb.ScanInput) (*ddb.ScanOutput, error, bool) {
-	done := false
-	var lastEvaluatedKey map[string]types.AttributeValue
+func ScanAll(ctx context.Context, scanner Scanner, input *ddb.ScanInput) iter.Seq2[*ddb.ScanOutput, error] {
+	return func(yield func(*ddb.ScanOutput, error) bool) {
+		in := *input
 
-	return func(input *ddb.ScanInput) (*ddb.ScanOutput, error, bool) {
-		if done {
-			return nil, nil, done
+		for {
+			out, err := scanner.Scan(ctx, &in)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			if !yield(out, nil) {
+				return
+			}
+
+			if out.LastEvaluatedKey == nil {
+				return
+			}
+
+			in.ExclusiveStartKey = out.LastEvaluatedKey
 		}
-
-		input.ExclusiveStartKey = lastEvaluatedKey
-
-		output, err := scanner.Scan(ctx, input)
-		if err != nil {
-			done = true
-			return output, err, done
-		}
-
-		lastEvaluatedKey = output.LastEvaluatedKey
-
-		if lastEvaluatedKey == nil {
-			done = true
-		}
-
-		return output, nil, done
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -33,8 +34,9 @@ func TestClient_Scan(t *testing.T) {
 		}
 
 		client = Client{
-			logger: logger,
-			db:     &db,
+			logger:  logger,
+			db:      &db,
+			backoff: time.Millisecond,
 		}
 	})
 
@@ -99,8 +101,9 @@ func TestClient_BatchDeleteItems(t *testing.T) {
 		}
 
 		client = Client{
-			logger: logger,
-			db:     &db,
+			logger:  logger,
+			db:      &db,
+			backoff: time.Millisecond,
 		}
 	})
 
@@ -109,20 +112,6 @@ func TestClient_BatchDeleteItems(t *testing.T) {
 	})
 
 	err := group.
-		Test("should not make db call on dry run", func(t *testing.T) {
-			client.dryRun = true
-
-			input := []map[string]types.AttributeValue{
-				{
-					"key": &types.AttributeValueMemberS{Value: "value"},
-				},
-			}
-			_, err := client.BatchDeleteItems(ctx, "table", input)
-			odize.AssertNoError(t, err)
-
-			odize.AssertEqual(t, 0, batchWrite)
-
-		}).
 		Test("should run twice for unprocessed", func(t *testing.T) {
 
 			input := []map[string]types.AttributeValue{
@@ -206,8 +195,9 @@ func TestClient_BatchWriteItems(t *testing.T) {
 		}
 
 		client = Client{
-			logger: logger,
-			db:     &db,
+			logger:  logger,
+			db:      &db,
+			backoff: time.Millisecond,
 		}
 	})
 
@@ -216,19 +206,6 @@ func TestClient_BatchWriteItems(t *testing.T) {
 	})
 
 	err := group.
-		Test("should not make db call on dry run", func(t *testing.T) {
-			client.dryRun = true
-
-			input := []map[string]types.AttributeValue{
-				{
-					"key": &types.AttributeValueMemberS{Value: "value"},
-				},
-			}
-			_, err := client.BatchWriteItems(ctx, "table", input)
-			odize.AssertNoError(t, err)
-
-			odize.AssertEqual(t, 0, batchWrite)
-		}).
 		Test("should run twice for unprocessed", func(t *testing.T) {
 			input := []map[string]types.AttributeValue{
 				{

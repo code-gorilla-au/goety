@@ -3,7 +3,6 @@ package goety
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -51,25 +50,17 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 	s.reportProgress(fmt.Sprintf("scanning table %s for items to purge", tableName))
 	now := time.Now()
 
-	done := false
-	var err error
-	var out *dynamodb.ScanOutput
-	next := ddb.ScanIterator(ctx, s.client)
-
 	deleted := 0
 
-	for !done {
-		out, err, done = next(&dynamodb.ScanInput{
-			TableName:       &tableName,
-			AttributesToGet: []string{keys.PartitionKey, keys.SortKey},
-			Limit:           aws.Int32(defaultBatchSize),
-		})
+	input := &dynamodb.ScanInput{
+		TableName:       &tableName,
+		AttributesToGet: []string{keys.PartitionKey, keys.SortKey},
+		Limit:           aws.Int32(defaultBatchSize),
+	}
+
+	for out, err := range ddb.ScanAll(ctx, s.client, input) {
 		if err != nil {
 			return fmt.Errorf("scan items for purge: %w", err)
-		}
-
-		if out == nil {
-			break
 		}
 
 		if len(out.Items) == 0 {
@@ -82,14 +73,12 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 			return nil
 		}
 
-		_, err = s.client.BatchDeleteItems(ctx, tableName, out.Items)
-		if err != nil {
+		if _, err = s.client.BatchDeleteItems(ctx, tableName, out.Items); err != nil {
 			return fmt.Errorf("delete items for purge: %w", err)
 		}
 		deleted += len(out.Items)
 
 		s.reportProgress(fmt.Sprintf("deleted %d items", deleted))
-
 	}
 
 	since := time.Since(now)
@@ -107,10 +96,6 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 	s.reportProgress(fmt.Sprintf("dumping table %s to file %s", tableName, path))
 
 	queryOpts := WithQueryOptions(opts)
-
-	done := false
-	var output *dynamodb.ScanOutput
-	next := ddb.ScanIterator(ctx, s.client)
 
 	itemsScanned := 0
 	var dryRunResult []map[string]any
@@ -131,20 +116,20 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 	}
 
 	first := true
-	for !done {
-		output, err, done = next(
-			&dynamodb.ScanInput{
-				TableName:                 &tableName,
-				ProjectionExpression:      queryOpts.ProjectedExpressions,
-				FilterExpression:          queryOpts.FilterExpression,
-				ExpressionAttributeNames:  queryOpts.FilterNameAttributes,
-				ExpressionAttributeValues: queryOpts.FilterNameValues,
-			})
-		if err != nil && !errors.Is(err, ddb.ErrNoItems) {
-			return fmt.Errorf("scan items for dump: %w", err)
+	scanInput := &dynamodb.ScanInput{
+		TableName:                 &tableName,
+		ProjectionExpression:      queryOpts.ProjectedExpressions,
+		FilterExpression:          queryOpts.FilterExpression,
+		ExpressionAttributeNames:  queryOpts.FilterNameAttributes,
+		ExpressionAttributeValues: queryOpts.FilterNameValues,
+	}
+
+	for output, scanErr := range ddb.ScanAll(ctx, s.client, scanInput) {
+		if scanErr != nil {
+			return fmt.Errorf("scan items for dump: %w", scanErr)
 		}
 
-		if output == nil || len(output.Items) == 0 {
+		if len(output.Items) == 0 {
 			break
 		}
 
