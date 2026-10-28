@@ -3,6 +3,7 @@ package dynamodb
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -13,7 +14,7 @@ import (
 
 func TestClient_Scan(t *testing.T) {
 	logger := logging.New(false)
-	ctx := logging.WithContext(context.Background(), logger)
+	ctx := context.Background()
 	var client Client
 	var db ddbClientMock
 
@@ -46,6 +47,16 @@ func TestClient_Scan(t *testing.T) {
 
 			odize.AssertEqual(t, result.Items[0]["key"].(*types.AttributeValueMemberS).Value, "value")
 		}).
+		Test("should wrap scan errors", func(t *testing.T) {
+			expectedErr := errors.ErrUnsupported
+			db.ScanFunc = func(ctx context.Context, params *dynamodb.ScanInput, optFns ...func(*dynamodb.Options)) (*dynamodb.ScanOutput, error) {
+				return nil, expectedErr
+			}
+
+			_, err := client.Scan(ctx, &dynamodb.ScanInput{})
+			odize.AssertTrue(t, errors.Is(err, expectedErr))
+			odize.AssertTrue(t, strings.HasPrefix(err.Error(), "scan table:"))
+		}).
 		Run()
 
 	odize.AssertNoError(t, err)
@@ -53,7 +64,7 @@ func TestClient_Scan(t *testing.T) {
 
 func TestClient_BatchDeleteItems(t *testing.T) {
 	logger := logging.New(true)
-	ctx := logging.WithContext(context.Background(), logger)
+	ctx := context.Background()
 	var client Client
 	var db ddbClientMock
 
@@ -137,6 +148,8 @@ func TestClient_BatchDeleteItems(t *testing.T) {
 			}
 			_, err := client.BatchDeleteItems(ctx, "table", input)
 			odize.AssertError(t, err)
+			odize.AssertTrue(t, errors.Is(err, errors.ErrUnsupported))
+			odize.AssertTrue(t, strings.HasPrefix(err.Error(), "batch delete items:"))
 
 		}).
 		Test("should return early if no unprocessed items remain", func(t *testing.T) {
@@ -160,7 +173,7 @@ func TestClient_BatchDeleteItems(t *testing.T) {
 
 func TestClient_BatchWriteItems(t *testing.T) {
 	logger := logging.New(true)
-	ctx := logging.WithContext(context.Background(), logger)
+	ctx := context.Background()
 	var client Client
 	var db ddbClientMock
 
@@ -239,6 +252,8 @@ func TestClient_BatchWriteItems(t *testing.T) {
 			}
 			_, err := client.BatchWriteItems(ctx, "table", input)
 			odize.AssertError(t, err)
+			odize.AssertTrue(t, errors.Is(err, errors.ErrUnsupported))
+			odize.AssertTrue(t, strings.HasPrefix(err.Error(), "batch write items:"))
 		}).
 		Test("should return empty result for empty input", func(t *testing.T) {
 			output, err := client.BatchWriteItems(ctx, "table", nil)

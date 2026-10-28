@@ -20,7 +20,7 @@ func TestService_Purge(t *testing.T) {
 	var client DynamoClientMock
 	var service Service
 	logger := logging.New(true)
-	ctx := logging.WithContext(context.Background(), logger)
+	ctx := context.Background()
 
 	callScanAll := 0
 	callBatchDelete := 0
@@ -84,6 +84,7 @@ func TestService_Purge(t *testing.T) {
 
 			err := service.Purge(ctx, "my-table", TableKeys{PartitionKey: "pk", SortKey: "sk"})
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
+			odize.AssertTrue(t, strings.HasPrefix(err.Error(), "scan items for purge:"))
 		}).
 		Test("should return error if batch write fails", func(t *testing.T) {
 			expectedErr := errors.New("batch write error")
@@ -93,6 +94,7 @@ func TestService_Purge(t *testing.T) {
 
 			err := service.Purge(ctx, "my-table", TableKeys{PartitionKey: "pk", SortKey: "sk"})
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
+			odize.AssertTrue(t, strings.HasPrefix(err.Error(), "delete items for purge:"))
 		}).
 		Test("should not fail if scan has no items", func(t *testing.T) {
 
@@ -169,7 +171,7 @@ func TestService_Dump(t *testing.T) {
 	var service Service
 	var fileReadWriter mockFileReadWriter
 	logger := logging.New(true)
-	ctx := logging.WithContext(context.Background(), logger)
+	ctx := context.Background()
 
 	callScanAll := 0
 	callWriteFile := 0
@@ -269,6 +271,7 @@ func TestService_Dump(t *testing.T) {
 
 			err := service.Dump(ctx, "my-table", "path")
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
+			odize.AssertTrue(t, strings.HasPrefix(err.Error(), "scan items for dump:"))
 		}).
 		Test("should return error if create file fails", func(t *testing.T) {
 			expectedErr := errors.New("write file error")
@@ -278,6 +281,7 @@ func TestService_Dump(t *testing.T) {
 
 			err := service.Dump(ctx, "my-table", "path")
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
+			odize.AssertTrue(t, strings.HasPrefix(err.Error(), "create dump file:"))
 		}).
 		Test("should return error if writing items fails", func(t *testing.T) {
 			expectedErr := errors.New("write error")
@@ -287,6 +291,7 @@ func TestService_Dump(t *testing.T) {
 
 			err := service.Dump(ctx, "my-table", "path")
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
+			odize.AssertTrue(t, strings.HasPrefix(err.Error(), "write opening bracket to dump file:"))
 		}).
 		Test("should dump items with attributes", func(t *testing.T) {
 			attrExp := []string{"attr1", "attr2"}
@@ -319,7 +324,7 @@ func TestService_Seed(t *testing.T) {
 	var service Service
 	var fileReadWriter mockFileReadWriter
 	logger := logging.New(true)
-	ctx := logging.WithContext(context.Background(), logger)
+	ctx := context.Background()
 
 	callOpen := 0
 	callBatchWrite := 0
@@ -382,6 +387,7 @@ func TestService_Seed(t *testing.T) {
 
 			err := service.Seed(ctx, "my-table", "path")
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
+			odize.AssertTrue(t, strings.HasPrefix(err.Error(), "open seed file:"))
 		}).
 		Test("should return error if decode fails", func(t *testing.T) {
 			fileReadWriter.openFunc = func(filename string) (io.ReadCloser, error) {
@@ -399,6 +405,7 @@ func TestService_Seed(t *testing.T) {
 
 			err := service.Seed(ctx, "my-table", "path")
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
+			odize.AssertTrue(t, strings.HasPrefix(err.Error(), "write seed items:"))
 		}).
 		Test("should batch items into groups of 25", func(t *testing.T) {
 			var sb strings.Builder

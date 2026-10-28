@@ -4,7 +4,7 @@ Use this list to track what has been completed. Mark items `[x]` only after the 
 
 ## Current state
 
-`goety` is a small DynamoDB CLI (purge, dump, seed). The business logic fits in a few files, but the code is more complex than its surface area requires. In particular, the same bootstrap (parse flags → build logger → build client → build service → start spinner → run) is copy-pasted in three commands, and several concerns have more than one owner: dry-run is handled by both the service and the DynamoDB client, errors are logged and returned and then logged again, and progress messages pass through an emitter, a channel, and a spinner.
+`goety` is a small DynamoDB CLI (purge, dump, seed). The shared command bootstrap, stderr spinner, and CLI error handling are now in place. Further simplification remains in the DynamoDB scan adapter, output conversion, and service options; the checklist below tracks those later phases.
 
 ## Goal
 
@@ -24,15 +24,15 @@ Make the codebase easier to read, test, and maintain by removing unnecessary ind
 These correct assumptions made in the earlier draft and shape the checklist below.
 
 - `types.AttributeValue` does **not** marshal to DynamoDB JSON. `json.Marshal` of `*types.AttributeValueMemberS{Value: "pk"}` produces `{"Value":"pk"}`, not `{"S":"pk"}`. Removing the `AV*` types therefore requires a small replacement converter, otherwise `--raw-output` changes shape and the existing test breaks.
-- `dynamodb.Client.dryRun` is never set by `NewClient`/`NewWith`; production dry-run never reaches the client. The branch is dead in production and only exercised by tests. The service already owns dry-run.
+- `dynamodb.Client.dryRun` is never set by `NewClient`; production dry-run never reaches the client. The branch is dead in production and only exercised by tests. The service already owns dry-run.
 - `--limit` is parsed and stored in `QueryOpts.Limit`, but `Dump` never copies it into `ScanInput`. The flag currently has no effect.
-- Commands create a logger but never attach it to the context, so `dynamodb.NewClient` always logs through `slog.Default()` instead of the configured logger.
+- The runner passes the configured logger explicitly to `dynamodb.NewClient`; the prior context-based logger lookup has been removed.
 - `internal/dynamodb/types.go` also defines `Client`; the struct must move before that file is deleted.
 - `Put`/`PutItem` are unused in production. They exist only in the interface, generated mocks, and the separate SDK client in `cmd/local`.
 - `json.Encoder.Encode` appends a newline per value, so it cannot produce the compact `[{"..."},{"..."}]` output the current tests assert without extra handling.
-- `NewWith` is only called by `NewClient`.
+- `NewWith` has been folded into `NewClient`, which now loads default configuration and applies region/endpoint options while receiving the logger explicitly.
 - `cmd/local` is the local/e2e DynamoDB setup harness: it creates the table and seeds 1,000 items. `make db-seed` invokes it, and the `test-purge` / `test-seed` / `test-dump` integration targets depend on it. It is not a candidate for deletion.
-- `cmd/spinner` is only a demo of the emitter/spinner pair.
+- `cmd/spinner` was only a demo of the emitter/spinner pair and was deleted in Phase 1.
 - Phase order in the earlier draft was backwards: the runner cannot wire a progress callback before the service and spinner expose that API.
 
 ## AWS SDK retries (context)
@@ -64,32 +64,32 @@ This must land first because the runner depends on it.
 
 ### Phase 2: CLI runner and error handling
 
-- [ ] Create `internal/commands/runner.go` with one helper, for example:
+- [x] Create `../internal/commands/bootstrap.go` with one helper, for example:
 
   ```go
   func run(cmd *cobra.Command, endpoint string, action func(context.Context, goety.Service) error) error
   ```
 
   It owns:
-  - [ ] Building the logger with `logging.New(flagRootVerbose)`.
-  - [ ] Building the DynamoDB client from `flagRootAwsRegion` + `endpoint`.
-  - [ ] Building `goety.Service`.
-  - [ ] Starting a stderr spinner when `!flagRootVerbose` and passing `spin.Update` as the progress callback.
-  - [ ] Running `action` and returning its error.
+  - [x] Building the logger with `logging.New(flagRootVerbose)`.
+  - [x] Building the DynamoDB client from `flagRootAwsRegion` + `endpoint`.
+  - [x] Building `goety.Service`.
+  - [x] Starting a stderr spinner when `!flagRootVerbose` and passing `spin.Update` as the progress callback.
+  - [x] Running `action` and returning its error.
 
-- [ ] Refactor `cmd_purge.go`, `cmd_dump.go`, `cmd_seed.go` to use `RunE`, return errors, and contain only flags, validation, and option building.
-- [ ] Remove every `os.Exit(1)` and `logging.New(...)` from the command files.
-- [ ] Use `cmd.Context()` instead of `context.Background()` so cancellation can be wired later without touching commands.
-- [ ] Error policy:
-  - [ ] Set `rootCmd.SilenceUsage = true`; otherwise every runtime error prints the full usage text.
-  - [ ] Leave `SilenceErrors` at its default so Cobra prints the error once.
-  - [ ] `main` only exits non-zero; it does not print the error again.
-  - [ ] Remove `logger.Error(...)` immediately before `return err` in the service and DynamoDB client; wrap the error instead.
-- [ ] Change `logging.New` to write to `os.Stderr` so logs and progress never mix with `--dry-run` data on stdout.
-- [ ] Remove `logging.FromContext` / `logging.WithContext` (`internal/logging/context.go`) once nothing reads a logger from a context.
-- [ ] Remove `dynamodb.NewWith`; fold its two options into `NewClient(ctx, region, endpoint)`.
-- [ ] Drop the logger from `dynamodb.Client`. It is a thin adapter; error logs duplicate the service and per-item `JSONStringify` debug logs are noise. Delete `JSONStringify` if it becomes unused.
-- [ ] Keep `cmd/local` as the local/e2e DynamoDB setup harness used by `make db-seed`; do not fold it into the CLI. Document its role in `README.md` and clarify the `db-seed` target comment.
+- [x] Refactor `cmd_purge.go`, `cmd_dump.go`, `cmd_seed.go` to use `RunE`, return errors, and contain only flags, validation, and option building.
+- [x] Remove every `os.Exit(1)` and `logging.New(...)` from the command files.
+- [x] Use `cmd.Context()` instead of `context.Background()` so cancellation can be wired later without touching commands.
+- [x] Error policy:
+  - [x] Set `rootCmd.SilenceUsage = true`; otherwise every runtime error prints the full usage text.
+  - [x] Leave `SilenceErrors` at its default so Cobra prints the error once.
+  - [x] `main` only exits non-zero; it does not print the error again.
+  - [x] Remove `logger.Error(...)` immediately before `return err` in the service and DynamoDB client; wrap the error instead.
+- [x] Change `logging.New` to write to `os.Stderr` so logs and progress never mix with `--dry-run` data on stdout.
+- [x] Remove `logging.FromContext` / `logging.WithContext` (`internal/logging/context.go`) once nothing reads a logger from a context.
+- [x] Remove `dynamodb.NewWith`; fold its options into `NewClient(ctx, region, endpoint, logger)`.
+- [x] Keep the logger on `dynamodb.Client` and pass it explicitly to `NewClient`; do not look it up through context. Keep `JSONStringify` while the DynamoDB client uses it for debug logging.
+- [x] Keep `cmd/local` as the local/e2e DynamoDB setup harness used by `make db-seed`; do not fold it into the CLI. Document its role in `README.md` and clarify the `db-seed` target comment.
 - **Files affected:** `internal/commands/*`, `internal/logging/*`, `internal/dynamodb/dynamodb.go`, `cmd/local/*`, `main.go`, `README.md`
 
 ### Phase 3: DynamoDB adapter and scan iteration

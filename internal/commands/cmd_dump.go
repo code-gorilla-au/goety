@@ -3,12 +3,8 @@ package commands
 import (
 	"context"
 	"errors"
-	"os"
 
-	"github.com/code-gorilla-au/goety/internal/dynamodb"
 	"github.com/code-gorilla-au/goety/internal/goety"
-	"github.com/code-gorilla-au/goety/internal/logging"
-	"github.com/code-gorilla-au/goety/internal/spinner"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +24,7 @@ var dumpCmd = &cobra.Command{
 	Use:   "dump -t [TABLE_NAME] -p [FILE_PATH]",
 	Short: "dump the contents of a dynamodb to a file",
 	Long:  "dump will scan all items within a dynamodb table and write the contents to a file",
-	Run:   dumpFunc,
+	RunE:  dumpFunc,
 }
 
 func init() {
@@ -43,43 +39,24 @@ func init() {
 	dumpCmd.Flags().BoolVarP(&flagDumpRawOutput, "raw-output", "R", false, "Optional flag to output the dynamodb scan without transformation")
 }
 
-func dumpFunc(cmd *cobra.Command, args []string) {
-	log := logging.New(flagRootVerbose)
-	ctx := context.Background()
+func dumpFunc(cmd *cobra.Command, args []string) error {
+	return bootstrap(cmd, flagDumpEndpoint, func(ctx context.Context, service goety.Service) error {
+		if err := parseDumpFlag(); err != nil {
+			return err
+		}
 
-	if err := parseDumpFlag(); err != nil {
-		log.Error("error parsing flags", "error", err)
-		os.Exit(1)
-	}
-
-	log.Debug("loading dynamodb client")
-	dbClient, err := dynamodb.NewClient(ctx, flagRootAwsRegion, flagDumpEndpoint)
-	if err != nil {
-		log.Error("could not load client")
-		os.Exit(1)
-	}
-
-	var progress func(string)
-	if !flagRootVerbose {
-		spin := spinner.New(os.Stderr)
-		spin.Start("starting dump")
-		defer spin.Stop("dump complete")
-		progress = spin.Update
-	}
-
-	g := goety.New(dbClient, log, progress, flagRootDryRun)
-
-	_ = g.Dump(
-		ctx,
-		flagDumpTableName,
-		flagDumpFilePath,
-		goety.WithAttrs(flagDumpExtractAttrs),
-		goety.WithLimit(flagDumpLimit),
-		goety.WithFilterExpression(flagDumpFilterExp),
-		goety.WithFilterNameAttrs(flagDumpFilterAttrName),
-		goety.WithFilterNameValues(flagDumpFilterAttrValue),
-		goety.WithRawOutput(flagDumpRawOutput),
-	)
+		return service.Dump(
+			ctx,
+			flagDumpTableName,
+			flagDumpFilePath,
+			goety.WithAttrs(flagDumpExtractAttrs),
+			goety.WithLimit(flagDumpLimit),
+			goety.WithFilterExpression(flagDumpFilterExp),
+			goety.WithFilterNameAttrs(flagDumpFilterAttrName),
+			goety.WithFilterNameValues(flagDumpFilterAttrValue),
+			goety.WithRawOutput(flagDumpRawOutput),
+		)
+	})
 
 }
 

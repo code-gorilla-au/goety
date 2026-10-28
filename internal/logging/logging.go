@@ -15,7 +15,7 @@ func New(verbose bool) *slog.Logger {
 }
 
 func logger(level slog.Level) *slog.Logger {
-	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level:     level,
 		AddSource: level == slog.LevelDebug,
 	}))
