@@ -4,15 +4,28 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	ddb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
+// Client - dynamodb client to query the table (scan, batch write, batch delete)
+type Client struct {
+	db      ddbClient
+	logger  *slog.Logger
+	backoff time.Duration
+}
+
+// defaultUnprocessedBackoff is the initial wait before retrying unprocessed batch items.
+const defaultUnprocessedBackoff = 50 * time.Millisecond
+
+const maxUnprocessedBackoff = 2 * time.Second
+
 // NewClient - creates a new opinionated dynamodb client
 func NewClient(ctx context.Context, region string, endpoint string, logger *slog.Logger) (*Client, error) {
-	client := Client{logger: logger}
+	client := Client{logger: logger, backoff: defaultUnprocessedBackoff}
 
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
@@ -38,11 +51,6 @@ func (c *Client) Scan(ctx context.Context, input *ddb.ScanInput) (*ddb.ScanOutpu
 	}
 
 	return output, nil
-}
-
-// Put - puts an item into a dynamodb table
-func (c *Client) Put(ctx context.Context, input *ddb.PutItemInput) (*ddb.PutItemOutput, error) {
-	return c.db.PutItem(ctx, input)
 }
 
 // BatchWriteItems - writes items in a batch. Note, max size is 25 items within a batch.
@@ -84,11 +92,6 @@ func (c *Client) batchWriteItem(ctx context.Context, tableName string, requests 
 		RequestItems: map[string][]types.WriteRequest{tableName: requests},
 	}
 
-	if c.dryRun {
-		c.logger.Debug(fmt.Sprintf("dry run enabled, skipping batch %s", op), "items", JSONStringify(input))
-		return &ddb.BatchWriteItemOutput{}, nil
-	}
-
 	output, err := c.db.BatchWriteItem(ctx, &input)
 	if err != nil {
 		return output, fmt.Errorf("batch %s items: %w", op, err)
@@ -96,7 +99,16 @@ func (c *Client) batchWriteItem(ctx context.Context, tableName string, requests 
 
 	unprocessedItems := output.UnprocessedItems
 
+	backoff := c.backoff
 	for len(unprocessedItems) > 0 {
+		select {
+		case <-ctx.Done():
+			return output, fmt.Errorf("batch %s items: %w", op, ctx.Err())
+		case <-time.After(backoff):
+		}
+
+		backoff = min(backoff*2, maxUnprocessedBackoff)
+
 		unprocessedInput := ddb.BatchWriteItemInput{RequestItems: unprocessedItems}
 
 		unprocessedOutput, uErr := c.db.BatchWriteItem(ctx, &unprocessedInput)

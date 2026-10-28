@@ -22,9 +22,6 @@ var _ ddbClient = &ddbClientMock{}
 //			BatchWriteItemFunc: func(ctx context.Context, params *ddb.BatchWriteItemInput, optFns ...func(*ddb.Options)) (*ddb.BatchWriteItemOutput, error) {
 //				panic("mock out the BatchWriteItem method")
 //			},
-//			PutItemFunc: func(ctx context.Context, params *ddb.PutItemInput, optFns ...func(*ddb.Options)) (*ddb.PutItemOutput, error) {
-//				panic("mock out the PutItem method")
-//			},
 //			ScanFunc: func(ctx context.Context, params *ddb.ScanInput, optFns ...func(*ddb.Options)) (*ddb.ScanOutput, error) {
 //				panic("mock out the Scan method")
 //			},
@@ -37,9 +34,6 @@ var _ ddbClient = &ddbClientMock{}
 type ddbClientMock struct {
 	// BatchWriteItemFunc mocks the BatchWriteItem method.
 	BatchWriteItemFunc func(ctx context.Context, params *ddb.BatchWriteItemInput, optFns ...func(*ddb.Options)) (*ddb.BatchWriteItemOutput, error)
-
-	// PutItemFunc mocks the PutItem method.
-	PutItemFunc func(ctx context.Context, params *ddb.PutItemInput, optFns ...func(*ddb.Options)) (*ddb.PutItemOutput, error)
 
 	// ScanFunc mocks the Scan method.
 	ScanFunc func(ctx context.Context, params *ddb.ScanInput, optFns ...func(*ddb.Options)) (*ddb.ScanOutput, error)
@@ -55,15 +49,6 @@ type ddbClientMock struct {
 			// OptFns is the optFns argument value.
 			OptFns []func(*ddb.Options)
 		}
-		// PutItem holds details about calls to the PutItem method.
-		PutItem []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Params is the params argument value.
-			Params *ddb.PutItemInput
-			// OptFns is the optFns argument value.
-			OptFns []func(*ddb.Options)
-		}
 		// Scan holds details about calls to the Scan method.
 		Scan []struct {
 			// Ctx is the ctx argument value.
@@ -75,7 +60,6 @@ type ddbClientMock struct {
 		}
 	}
 	lockBatchWriteItem sync.RWMutex
-	lockPutItem        sync.RWMutex
 	lockScan           sync.RWMutex
 }
 
@@ -120,50 +104,6 @@ func (mock *ddbClientMock) BatchWriteItemCalls() []struct {
 	mock.lockBatchWriteItem.RLock()
 	calls = mock.calls.BatchWriteItem
 	mock.lockBatchWriteItem.RUnlock()
-	return calls
-}
-
-// PutItem calls PutItemFunc.
-func (mock *ddbClientMock) PutItem(ctx context.Context, params *ddb.PutItemInput, optFns ...func(*ddb.Options)) (*ddb.PutItemOutput, error) {
-	callInfo := struct {
-		Ctx    context.Context
-		Params *ddb.PutItemInput
-		OptFns []func(*ddb.Options)
-	}{
-		Ctx:    ctx,
-		Params: params,
-		OptFns: optFns,
-	}
-	mock.lockPutItem.Lock()
-	mock.calls.PutItem = append(mock.calls.PutItem, callInfo)
-	mock.lockPutItem.Unlock()
-	if mock.PutItemFunc == nil {
-		var (
-			putItemOutputOut *ddb.PutItemOutput
-			errOut           error
-		)
-		return putItemOutputOut, errOut
-	}
-	return mock.PutItemFunc(ctx, params, optFns...)
-}
-
-// PutItemCalls gets all the calls that were made to PutItem.
-// Check the length with:
-//
-//	len(mockedddbClient.PutItemCalls())
-func (mock *ddbClientMock) PutItemCalls() []struct {
-	Ctx    context.Context
-	Params *ddb.PutItemInput
-	OptFns []func(*ddb.Options)
-} {
-	var calls []struct {
-		Ctx    context.Context
-		Params *ddb.PutItemInput
-		OptFns []func(*ddb.Options)
-	}
-	mock.lockPutItem.RLock()
-	calls = mock.calls.PutItem
-	mock.lockPutItem.RUnlock()
 	return calls
 }
 

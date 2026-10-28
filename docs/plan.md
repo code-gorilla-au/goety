@@ -43,73 +43,24 @@ The SDK does **not** retry `BatchWriteItem.UnprocessedItems` — that response i
 
 ## Work checklist
 
-### Phase 1: Progress reporting and spinner
-
-This must land first because the runner depends on it.
-
-- [x] Delete `internal/emitter` (package, interfaces, tests).
-- [x] Remove the unused `Emitter` interface from `internal/goety/interfaces.go`.
-- [x] Give `goety.Service` a `progress func(string)` field instead of `emitter.MessagePublisher`.
-  - [x] Add it to `New`; treat `nil` as a no-op so tests do not need a mock.
-  - [x] Contract: `progress` only records the latest message. It must not block, read files, or write to the terminal on the caller's goroutine.
-- [x] Rewrite `internal/spinner`:
-  - [x] `New(w io.Writer)` so the spinner writes to stderr.
-  - [x] Run a `time.Ticker` loop; read the latest message under a `sync.Mutex` each frame.
-  - [x] `Update(msg)` stores the message under the mutex. No channel and no wake signal are needed; a ticker already redraws.
-  - [x] `Start` launches the loop, `Stop` signals a `done` channel and clears the line.
-  - [x] Expose an unexported frame-duration knob so tests do not sleep for real.
-- [x] Delete `cmd/spinner`, which exists only to demo the emitter/spinner pair.
-- [x] Replace every `s.emitter.Publish(...)` in `internal/goety/goety.go` with `s.reportProgress(...)`, a nil-safe wrapper around the progress callback.
-- **Files affected:** `internal/emitter/*`, `internal/spinner/*`, `internal/goety/*`, `cmd/spinner/*`
-
-### Phase 2: CLI runner and error handling
-
-- [x] Create `../internal/commands/bootstrap.go` with one helper, for example:
-
-  ```go
-  func run(cmd *cobra.Command, endpoint string, action func(context.Context, goety.Service) error) error
-  ```
-
-  It owns:
-  - [x] Building the logger with `logging.New(flagRootVerbose)`.
-  - [x] Building the DynamoDB client from `flagRootAwsRegion` + `endpoint`.
-  - [x] Building `goety.Service`.
-  - [x] Starting a stderr spinner when `!flagRootVerbose` and passing `spin.Update` as the progress callback.
-  - [x] Running `action` and returning its error.
-
-- [x] Refactor `cmd_purge.go`, `cmd_dump.go`, `cmd_seed.go` to use `RunE`, return errors, and contain only flags, validation, and option building.
-- [x] Remove every `os.Exit(1)` and `logging.New(...)` from the command files.
-- [x] Use `cmd.Context()` instead of `context.Background()` so cancellation can be wired later without touching commands.
-- [x] Error policy:
-  - [x] Set `rootCmd.SilenceUsage = true`; otherwise every runtime error prints the full usage text.
-  - [x] Leave `SilenceErrors` at its default so Cobra prints the error once.
-  - [x] `main` only exits non-zero; it does not print the error again.
-  - [x] Remove `logger.Error(...)` immediately before `return err` in the service and DynamoDB client; wrap the error instead.
-- [x] Change `logging.New` to write to `os.Stderr` so logs and progress never mix with `--dry-run` data on stdout.
-- [x] Remove `logging.FromContext` / `logging.WithContext` (`internal/logging/context.go`) once nothing reads a logger from a context.
-- [x] Remove `dynamodb.NewWith`; fold its options into `NewClient(ctx, region, endpoint, logger)`.
-- [x] Keep the logger on `dynamodb.Client` and pass it explicitly to `NewClient`; do not look it up through context. Keep `JSONStringify` while the DynamoDB client uses it for debug logging.
-- [x] Keep `cmd/local` as the local/e2e DynamoDB setup harness used by `make db-seed`; do not fold it into the CLI. Document its role in `README.md` and clarify the `db-seed` target comment.
-- **Files affected:** `internal/commands/*`, `internal/logging/*`, `internal/dynamodb/dynamodb.go`, `cmd/local/*`, `main.go`, `README.md`
-
 ### Phase 3: DynamoDB adapter and scan iteration
 
-- [ ] Move the `Client` struct from `internal/dynamodb/types.go` to `internal/dynamodb/dynamodb.go` (or `client.go`).
-- [ ] Remove the dead `ErrNoItems` check from `Dump`, then delete `ErrNoItems` from `internal/dynamodb/types.go`. Leave `AVer` / `AV*` in place until Phase 4 replaces them; removing them here would silently break `--raw-output` for an intermediate commit.
-- [ ] Remove `dryRun` from the DynamoDB client and delete the `batchWriteItem` dry-run branch and its two "should not make db call on dry run" tests. The service is the single owner of dry-run.
-- [ ] Remove `Put` from `goety.DynamoClient`, `Client.Put`, and `PutItem` from `ddbClient`; run `go generate ./...` to regenerate mocks.
-- [ ] Replace `ScanIterator` with a standard-library range iterator (the module targets Go 1.27):
+- [x] Move the `Client` struct from `internal/dynamodb/types.go` to `internal/dynamodb/dynamodb.go` (or `client.go`).
+- [x] Remove the dead `ErrNoItems` check from `Dump`, then delete `ErrNoItems` from `internal/dynamodb/types.go`. Leave `AVer` / `AV*` in place until Phase 4 replaces them; removing them here would silently break `--raw-output` for an intermediate commit.
+- [x] Remove `dryRun` from the DynamoDB client and delete the `batchWriteItem` dry-run branch and its two "should not make db call on dry run" tests. The service is the single owner of dry-run.
+- [x] Remove `Put` from `goety.DynamoClient`, `Client.Put`, and `PutItem` from `ddbClient`; run `go generate ./...` to regenerate mocks.
+- [x] Replace `ScanIterator` with a standard-library range iterator (the module targets Go 1.27):
 
   ```go
   func ScanAll(ctx context.Context, scanner Scanner, input *dynamodb.ScanInput) iter.Seq2[*dynamodb.ScanOutput, error]
   ```
 
-  - [ ] Clone the input (`in := *input`) inside the iterator so pagination does not mutate the caller's `ScanInput`.
-  - [ ] Yield `(nil, err)` once on a scan error and stop.
-  - [ ] Callers use `for out, err := range ddb.ScanAll(...)`; `return`/`break` stops pagination without a sentinel error.
-  - [ ] The current triple return `(*ScanOutput, error, bool)` is the real defect: `done` is easy to misread, `nil` means both "finished" and "no result", and the caller still owns the loop. Use `iter.Seq2`; do not add a custom iterator type, `Next() (T, error)` wrapper, channel, or callback-plus-sentinel.
-  - [ ] Add a test that covers multiple pages, a scan error, and early `break`.
-- [ ] Keep `BatchWriteItem.UnprocessedItems` looping, but add a small backoff before retrying.
+  - [x] Clone the input (`in := *input`) inside the iterator so pagination does not mutate the caller's `ScanInput`.
+  - [x] Yield `(nil, err)` once on a scan error and stop.
+  - [x] Callers use `for out, err := range ddb.ScanAll(...)`; `return`/`break` stops pagination without a sentinel error.
+  - [x] The current triple return `(*ScanOutput, error, bool)` is the real defect: `done` is easy to misread, `nil` means both "finished" and "no result", and the caller still owns the loop. Use `iter.Seq2`; do not add a custom iterator type, `Next() (T, error)` wrapper, channel, or callback-plus-sentinel.
+  - [x] Add a test that covers multiple pages, a scan error, and early `break`.
+- [x] Keep `BatchWriteItem.UnprocessedItems` looping, but add a small backoff before retrying.
 - **Files affected:** `internal/dynamodb/*`, `internal/goety/goety.go`, `internal/goety/interfaces.go`, generated mocks
 
 ### Phase 4: Dump and seed output
