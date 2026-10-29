@@ -7,19 +7,19 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-func WithQueryOptions(opts []QueryFuncOpts) *QueryOpts {
-	queryOpts := &QueryOpts{}
+func WithDumpOptions(opts []DumpOption) *DumpOptions {
+	dumpOpts := &DumpOptions{}
 
 	for _, opt := range opts {
-		queryOpts = opt(queryOpts)
+		dumpOpts = opt(dumpOpts)
 	}
 
-	return queryOpts
+	return dumpOpts
 }
 
 // WithAttrs - provide a list of dynamodb attributes the query will return
-func WithAttrs(attrs []string) QueryFuncOpts {
-	return func(opts *QueryOpts) *QueryOpts {
+func WithAttrs(attrs []string) DumpOption {
+	return func(opts *DumpOptions) *DumpOptions {
 		if len(attrs) == 0 {
 			return opts
 		}
@@ -30,8 +30,8 @@ func WithAttrs(attrs []string) QueryFuncOpts {
 }
 
 // WithFilterExpression - provide a filter condition for the query
-func WithFilterExpression(condition string) QueryFuncOpts {
-	return func(opts *QueryOpts) *QueryOpts {
+func WithFilterExpression(condition string) DumpOption {
+	return func(opts *DumpOptions) *DumpOptions {
 		if condition == "" {
 			return opts
 		}
@@ -41,59 +41,33 @@ func WithFilterExpression(condition string) QueryFuncOpts {
 	}
 }
 
-// WithFilterNameAttrs - provide a list of attribute names to filter on
-func WithFilterNameAttrs(attrName string) QueryFuncOpts {
-	return func(opts *QueryOpts) *QueryOpts {
-		if attrName == "" {
+// WithFilterNameAttrs - provide a map of expression attribute names to filter on
+func WithFilterNameAttrs(attrNames map[string]string) DumpOption {
+	return func(opts *DumpOptions) *DumpOptions {
+		if len(attrNames) == 0 {
 			return opts
 		}
 
-		filterNameAttr := make(map[string]string)
-		expList := strings.Split(attrName, ",")
-
-		for _, exp := range expList {
-			ex := strings.Split(exp, "=")
-			if len(ex) < 2 {
-				continue
-			}
-			tKey := strings.TrimSpace(ex[0])
-			tVal := strings.TrimSpace(ex[1])
-			filterNameAttr[tKey] = tVal
-		}
-
-		opts.FilterNameAttributes = filterNameAttr
+		opts.FilterNameAttributes = attrNames
 		return opts
 	}
 }
 
-// WithFilterNameValues - provide a list of attribute values to filter on
-func WithFilterNameValues(attrValues string) QueryFuncOpts {
-	return func(opts *QueryOpts) *QueryOpts {
-		if attrValues == "" {
+// WithFilterNameValues - provide a map of expression attribute values to filter on
+func WithFilterNameValues(attrValues map[string]types.AttributeValue) DumpOption {
+	return func(opts *DumpOptions) *DumpOptions {
+		if len(attrValues) == 0 {
 			return opts
 		}
 
-		filterNameValues := make(map[string]types.AttributeValue)
-		expList := strings.Split(attrValues, ",")
-
-		for _, exp := range expList {
-			ex := strings.Split(exp, "=")
-			if len(ex) < 2 {
-				continue
-			}
-			tKey := strings.TrimSpace(ex[0])
-			tVal := types.AttributeValueMemberS{Value: strings.TrimSpace(ex[1])}
-			filterNameValues[tKey] = &tVal
-		}
-
-		opts.FilterNameValues = filterNameValues
+		opts.FilterNameValues = attrValues
 		return opts
 	}
 }
 
 // WithLimit - provide a limit to the query
-func WithLimit(limit int32) QueryFuncOpts {
-	return func(opts *QueryOpts) *QueryOpts {
+func WithLimit(limit int32) DumpOption {
+	return func(opts *DumpOptions) *DumpOptions {
 		if limit == 0 {
 			return opts
 		}
@@ -103,8 +77,8 @@ func WithLimit(limit int32) QueryFuncOpts {
 	}
 }
 
-func WithRawOutput(raw bool) QueryFuncOpts {
-	return func(opts *QueryOpts) *QueryOpts {
+func WithRawOutput(raw bool) DumpOption {
+	return func(opts *DumpOptions) *DumpOptions {
 		opts.RawOutput = raw
 		return opts
 	}

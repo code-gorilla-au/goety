@@ -99,17 +99,17 @@ The SDK does **not** retry `BatchWriteItem.UnprocessedItems` — that response i
 
 The option machinery is a surface-area and boundary problem, not a defect in functional options. Delete it because `Dump` has exactly one production caller (`dumpFunc`; `goety.New` is only constructed in `bootstrap.go`) that always passes all six options, and because the option closures implement CLI syntax inside the domain package. The struct swap and the parse move address different axes: the first removes the mechanism, the second moves the responsibility. Doing only the first leaves the CLI grammar advertised on an exported struct.
 
-- [ ] Replace `internal/goety/options.go` functional options with a plain `DumpOptions` struct populated by the command. Remove `QueryFuncOpts`, `WithQueryOptions`, and the six `With*` functions.
-- [ ] Move `--attribute-name` / `--attribute-value` parsing into `internal/commands/cmd_dump.go`, beside `parseDumpFlag`; the service receives `map[string]string` and `map[string]types.AttributeValue`, never comma-separated strings.
-  - [ ] Use `strings.Cut(entry, "=")` instead of `strings.Split`, so filter values containing `=` (padded base64, for example) survive.
-  - [ ] Return an error for a malformed entry (no `=`, or an empty key) instead of silently `continue`-ing. Today a bad `--attribute-name` yields an empty map and fails later as a DynamoDB `ValidationException`. This is a CLI behaviour change and needs a regression test that fails against the current code.
-  - [ ] Pin the duplicate-key behaviour (last entry wins) with a test.
-  - [ ] Return the parse error before `service.Dump`, so a flag typo fails without constructing a DynamoDB client. Follows the `cmd_purge.go` / `TableKeys` precedent: build a typed value from flags, then call the service.
-- [ ] Keep projection formatting in the service: `strings.Join(attrs, ", ")` is DynamoDB expression grammar, not CLI grammar. `DumpOptions.ProjectedExpressions` stays `[]string`.
-- [ ] Preserve the existing `--limit` wiring when converting to the struct (see Phase 4). Keep `Limit *int32`.
-- [ ] Rename `internal/goety/types.go` to `service.go`, and rename `QueryOpts` to `DumpOptions`; the service performs a `Scan`, so the `Query` naming is wrong.
-- [ ] Tests: update the `WithLimit(10)` / `WithAttrs(...)` / `WithRawOutput(true)` call sites in `goety_test.go` to struct literals, and add a table-driven test for the command-layer parse helper covering empty input, multiple pairs, whitespace, `=` inside a value, a malformed entry, and duplicate keys.
-- **Files affected:** `internal/goety/options.go` (deleted), `internal/goety/types.go` (renamed), `internal/goety/goety.go`, `internal/commands/cmd_dump.go`, `internal/goety/goety_test.go`, new `internal/commands/*_test.go`
+  - Not done by design: the functional options are intentional and stay. The types were renamed instead: `QueryOpts` -> `DumpOptions`, `QueryFuncOpts` -> `DumpOption`, `WithQueryOptions` -> `WithDumpOptions`.
+- [x] Move `--attribute-name` / `--attribute-value` parsing into `internal/commands/cmd_dump.go`, beside `parseDumpFlag`; the service receives `map[string]string` and `map[string]types.AttributeValue`, never comma-separated strings.
+  - [x] Use `strings.Cut(entry, "=")` instead of `strings.Split`, so filter values containing `=` (padded base64, for example) survive.
+  - [x] Return an error for a malformed entry (no `=`, or an empty key) instead of silently `continue`-ing. Today a bad `--attribute-name` yields an empty map and fails later as a DynamoDB `ValidationException`. This is a CLI behaviour change and needs a regression test that fails against the current code.
+  - [x] Pin the duplicate-key behaviour (last entry wins) with a test.
+  - [x] Return the parse error before `service.Dump`, so a flag typo fails without constructing a DynamoDB client. Follows the `cmd_purge.go` / `TableKeys` precedent: build a typed value from flags, then call the service.
+- [x] Keep projection formatting in the service: `strings.Join(attrs, ", ")` is DynamoDB expression grammar, not CLI grammar. `DumpOptions.ProjectedExpressions` stays `*string`, built by `WithAttrs`.
+- [x] Preserve the existing `--limit` wiring when converting to the struct (see Phase 4). Keep `Limit *int32`.
+- [x] Rename `internal/goety/types.go` to `service.go`, and rename `QueryOpts` to `DumpOptions`; the service performs a `Scan`, so the `Query` naming is wrong.
+- [x] Tests: the option call sites in `goety_test.go` stay as functional-option calls (the options were retained); a table-driven command-layer test covers empty input, multiple pairs, whitespace, `=` inside a value, a malformed entry, and duplicate keys, and a service test covers the typed filter maps.
+- **Files affected:** `internal/goety/options.go`, `internal/goety/service.go` (renamed from `types.go`), `internal/goety/goety.go`, `internal/commands/cmd_dump.go`, `internal/goety/goety_test.go`, new `internal/commands/cmd_dump_test.go`
 
 ### Phase 6: Documentation and dev tooling
 
