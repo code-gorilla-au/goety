@@ -394,6 +394,25 @@ func TestService_Dump(t *testing.T) {
 			err := service.Dump(ctx, "my-table", "path", WithAttrs(attrExp))
 			odize.AssertNoError(t, err)
 		}).
+		Test("should pass filter attribute names and values to the scan input", func(t *testing.T) {
+			client.ScanFunc = func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
+				odize.AssertEqual(t, map[string]string{"#pk": "pk"}, input.ExpressionAttributeNames)
+				odize.AssertEqual(t, map[string]types.AttributeValue{
+					":pk": &types.AttributeValueMemberS{Value: "1"},
+				}, input.ExpressionAttributeValues)
+
+				return &dynamodb.ScanOutput{}, nil
+			}
+
+			err := service.Dump(
+				ctx,
+				"my-table",
+				"path",
+				WithFilterNameAttrs(map[string]string{"#pk": "pk"}),
+				WithFilterNameValues(map[string]types.AttributeValue{":pk": &types.AttributeValueMemberS{Value: "1"}}),
+			)
+			odize.AssertNoError(t, err)
+		}).
 		Run()
 
 	odize.AssertNoError(t, err)

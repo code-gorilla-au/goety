@@ -19,7 +19,7 @@ type TableKeys struct {
 	SortKey      string
 }
 
-type QueryOpts struct {
+type DumpOptions struct {
 	Limit                *int32
 	FilterExpression     *string
 	ProjectedExpressions *string
@@ -28,4 +28,4 @@ type QueryOpts struct {
 	RawOutput            bool
 }
 
-type QueryFuncOpts = func(*QueryOpts) *QueryOpts
+type DumpOption = func(*DumpOptions) *DumpOptions

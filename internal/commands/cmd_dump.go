@@ -3,7 +3,10 @@ package commands
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/code-gorilla-au/goety/internal/goety"
 	"github.com/spf13/cobra"
 )
@@ -40,11 +43,21 @@ func init() {
 }
 
 func dumpFunc(cmd *cobra.Command, args []string) error {
-	return bootstrap(cmd, flagDumpEndpoint, func(ctx context.Context, service goety.Service) error {
-		if err := parseDumpFlag(); err != nil {
-			return err
-		}
+	if err := parseDumpFlag(); err != nil {
+		return err
+	}
 
+	filterNames, err := parseAttributeNames(flagDumpFilterAttrName)
+	if err != nil {
+		return err
+	}
+
+	filterValues, err := parseAttributeValues(flagDumpFilterAttrValue)
+	if err != nil {
+		return err
+	}
+
+	return bootstrap(cmd, flagDumpEndpoint, func(ctx context.Context, service goety.Service) error {
 		return service.Dump(
 			ctx,
 			flagDumpTableName,
@@ -52,12 +65,59 @@ func dumpFunc(cmd *cobra.Command, args []string) error {
 			goety.WithAttrs(flagDumpExtractAttrs),
 			goety.WithLimit(flagDumpLimit),
 			goety.WithFilterExpression(flagDumpFilterExp),
-			goety.WithFilterNameAttrs(flagDumpFilterAttrName),
-			goety.WithFilterNameValues(flagDumpFilterAttrValue),
+			goety.WithFilterNameAttrs(filterNames),
+			goety.WithFilterNameValues(filterValues),
 			goety.WithRawOutput(flagDumpRawOutput),
 		)
 	})
+}
 
+func parseAttributeNames(input string) (map[string]string, error) {
+	if input == "" {
+		return nil, nil
+	}
+
+	names := make(map[string]string)
+
+	for _, entry := range strings.Split(input, ",") {
+		rawKey, value, found := strings.Cut(entry, "=")
+		if !found {
+			return nil, fmt.Errorf("invalid attribute name %q: expected key=value", entry)
+		}
+
+		key := strings.TrimSpace(rawKey)
+		if key == "" {
+			return nil, fmt.Errorf("invalid attribute name %q: key is empty", entry)
+		}
+
+		names[key] = strings.TrimSpace(value)
+	}
+
+	return names, nil
+}
+
+func parseAttributeValues(input string) (map[string]types.AttributeValue, error) {
+	if input == "" {
+		return nil, nil
+	}
+
+	values := make(map[string]types.AttributeValue)
+
+	for _, entry := range strings.Split(input, ",") {
+		rawKey, value, found := strings.Cut(entry, "=")
+		if !found {
+			return nil, fmt.Errorf("invalid attribute value %q: expected key=value", entry)
+		}
+
+		key := strings.TrimSpace(rawKey)
+		if key == "" {
+			return nil, fmt.Errorf("invalid attribute value %q: key is empty", entry)
+		}
+
+		values[key] = &types.AttributeValueMemberS{Value: strings.TrimSpace(value)}
+	}
+
+	return values, nil
 }
 
 // parsePurgeFlag will validate the flags passed to the purge command

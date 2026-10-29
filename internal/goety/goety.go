@@ -92,10 +92,10 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 // Example:
 //
 //	Dump(ctx, "my-table", "path/to/file.json", []string{"attr1", "attr2"})
-func (s Service) Dump(ctx context.Context, tableName string, path string, opts ...QueryFuncOpts) (err error) {
+func (s Service) Dump(ctx context.Context, tableName string, path string, opts ...DumpOption) (err error) {
 	s.reportProgress(fmt.Sprintf("dumping table %s to file %s", tableName, path))
 
-	queryOpts := WithQueryOptions(opts)
+	dumpOpts := WithDumpOptions(opts)
 
 	itemsScanned := 0
 	var dryRunResult []map[string]any
@@ -123,11 +123,11 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 	first := true
 	scanInput := &dynamodb.ScanInput{
 		TableName:                 &tableName,
-		ProjectionExpression:      queryOpts.ProjectedExpressions,
-		FilterExpression:          queryOpts.FilterExpression,
-		ExpressionAttributeNames:  queryOpts.FilterNameAttributes,
-		ExpressionAttributeValues: queryOpts.FilterNameValues,
-		Limit:                     queryOpts.Limit,
+		ProjectionExpression:      dumpOpts.ProjectedExpressions,
+		FilterExpression:          dumpOpts.FilterExpression,
+		ExpressionAttributeNames:  dumpOpts.FilterNameAttributes,
+		ExpressionAttributeValues: dumpOpts.FilterNameValues,
+		Limit:                     dumpOpts.Limit,
 	}
 
 	for output, scanErr := range ddb.ScanAll(ctx, s.client, scanInput) {
@@ -140,13 +140,13 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 		}
 
 		if s.dryRun {
-			items, transformErr := transformDumpOutput(output.Items, queryOpts.RawOutput)
+			items, transformErr := transformDumpOutput(output.Items, dumpOpts.RawOutput)
 			if transformErr != nil {
 				return fmt.Errorf("transform dump items: %w", transformErr)
 			}
 			dryRunResult = append(dryRunResult, items...)
 		} else {
-			if err = writeDumpItems(w, output.Items, queryOpts.RawOutput, &first); err != nil {
+			if err = writeDumpItems(w, output.Items, dumpOpts.RawOutput, &first); err != nil {
 				return fmt.Errorf("write dump items: %w", err)
 			}
 		}

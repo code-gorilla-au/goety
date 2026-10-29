@@ -13,6 +13,7 @@ Make the codebase easier to read, test, and maintain by removing unnecessary ind
 ## Design principles
 
 - **One owner per concern.** Commands parse flags; a thin runner wires dependencies; `goety.Service` implements behaviour; the DynamoDB client is a thin adapter.
+- **CLI syntax stops at the command layer.** Comma-separated lists and `key=value` pairs exist only because cobra asks the user for input. The service receives typed values (`[]string`, `map[string]string`, `map[string]types.AttributeValue`). DynamoDB expression grammar — joining a projection with `", "`, building expression maps — stays in the service.
 - **Explicit dependencies.** Pass `*slog.Logger` and clients as arguments. Do not look dependencies up through `context.Context`.
 - **Return errors, do not log-and-exit.** Wrap with context (`fmt.Errorf("scan table: %w", err)`) and let the CLI boundary print once.
 - **UI on stderr, data on stdout.** The spinner and progress messages must not corrupt `dump --dry-run` output.
@@ -25,7 +26,9 @@ These correct assumptions made in the earlier draft and shape the checklist belo
 
 - `types.AttributeValue` does **not** marshal to DynamoDB JSON. `json.Marshal` of `*types.AttributeValueMemberS{Value: "pk"}` produces `{"Value":"pk"}`, not `{"S":"pk"}`. Removing the `AV*` types therefore requires a small replacement converter, otherwise `--raw-output` changes shape and the existing test breaks.
 - `dynamodb.Client.dryRun` is never set by `NewClient`; production dry-run never reaches the client. The branch is dead in production and only exercised by tests. The service already owns dry-run.
-- `--limit` is parsed and stored in `QueryOpts.Limit`, but `Dump` never copies it into `ScanInput`. The flag currently has no effect.
+- `--limit` is now wired: `Dump` copies `QueryOpts.Limit` into `ScanInput.Limit`, and the Phase 4 item is done. The earlier finding that the flag had no effect is stale; Phase 5 must not drop the wiring while replacing the option type.
+- `--attribute-name` / `--attribute-value` are parsed inside the service (`internal/goety/options.go`), and malformed entries are dropped with `continue`. That is the boundary violation Phase 5 fixes: a bad flag produces an empty map and only surfaces later as a DynamoDB `ValidationException`. Replacing the options with a struct does **not** fix it — the parse has to move to `internal/commands/cmd_dump.go`.
+- Functional options are safe as implemented: `WithQueryOptions` allocates `&QueryOpts{}` locally, applies each option sequentially in one goroutine, and does not leak the value before it is complete. There is no aliasing hazard, and because all six options write distinct fields, order is irrelevant. Phase 5 deletes them because they have exactly one caller in the same internal package, not because the pattern is unsafe.
 - The runner passes the configured logger explicitly to `dynamodb.NewClient`; the prior context-based logger lookup has been removed.
 - `internal/dynamodb/types.go` also defines `Client`; the struct must move before that file is deleted.
 - `Put`/`PutItem` are unused in production. They exist only in the interface, generated mocks, and the separate SDK client in `cmd/local`.
@@ -42,26 +45,6 @@ AWS SDK for Go v2 provides a default `Standard` retryer. It automatically retrie
 The SDK does **not** retry `BatchWriteItem.UnprocessedItems` — that response is a partial success, not an error. The manual loop in `internal/dynamodb/dynamodb.go` is required and should be kept. Add a small backoff between retries so a throttled table is not hammered.
 
 ## Work checklist
-
-### Phase 3: DynamoDB adapter and scan iteration
-
-- [x] Move the `Client` struct from `internal/dynamodb/types.go` to `internal/dynamodb/dynamodb.go` (or `client.go`).
-- [x] Remove the dead `ErrNoItems` check from `Dump`, then delete `ErrNoItems` from `internal/dynamodb/types.go`. Leave `AVer` / `AV*` in place until Phase 4 replaces them; removing them here would silently break `--raw-output` for an intermediate commit.
-- [x] Remove `dryRun` from the DynamoDB client and delete the `batchWriteItem` dry-run branch and its two "should not make db call on dry run" tests. The service is the single owner of dry-run.
-- [x] Remove `Put` from `goety.DynamoClient`, `Client.Put`, and `PutItem` from `ddbClient`; run `go generate ./...` to regenerate mocks.
-- [x] Replace `ScanIterator` with a standard-library range iterator (the module targets Go 1.27):
-
-  ```go
-  func ScanAll(ctx context.Context, scanner Scanner, input *dynamodb.ScanInput) iter.Seq2[*dynamodb.ScanOutput, error]
-  ```
-
-  - [x] Clone the input (`in := *input`) inside the iterator so pagination does not mutate the caller's `ScanInput`.
-  - [x] Yield `(nil, err)` once on a scan error and stop.
-  - [x] Callers use `for out, err := range ddb.ScanAll(...)`; `return`/`break` stops pagination without a sentinel error.
-  - [x] The current triple return `(*ScanOutput, error, bool)` is the real defect: `done` is easy to misread, `nil` means both "finished" and "no result", and the caller still owns the loop. Use `iter.Seq2`; do not add a custom iterator type, `Next() (T, error)` wrapper, channel, or callback-plus-sentinel.
-  - [x] Add a test that covers multiple pages, a scan error, and early `break`.
-- [x] Keep `BatchWriteItem.UnprocessedItems` looping, but add a small backoff before retrying.
-- **Files affected:** `internal/dynamodb/*`, `internal/goety/goety.go`, `internal/goety/interfaces.go`, generated mocks
 
 ### Phase 4: Dump and seed output
 
@@ -84,6 +67,7 @@ The SDK does **not** retry `BatchWriteItem.UnprocessedItems` — that response i
 - [x] For `--dry-run`, accumulate items for `Dump` and `Seed`, then pretty-print once. Do not print one JSON document per seeded item.
 - [ ] Make `prettyPrint` return an error instead of swallowing it, and write to an explicit `io.Writer`.
 - [x] Wire `--limit` into `ScanInput.Limit` or remove the flag and its README entry. Recommendation: wire it; it is one line and the help text already promises it.
+  - Done: `Dump` sets `ScanInput.Limit` from `QueryOpts.Limit`. `DumpOptions.Limit` must keep its pointer type so "unset" stays distinguishable from `0`.
 - [ ] Tests: extend the existing exact-output assertions rather than adding golden files.
   - [ ] Multiple items and multiple scan pages.
   - [ ] Raw output with nested `M`/`L` values.
@@ -91,14 +75,6 @@ The SDK does **not** retry `BatchWriteItem.UnprocessedItems` — that response i
   - [ ] Flattened and raw output are byte-identical to the pre-refactor output.
 - **Files affected:** `internal/dynamodb/utils.go`, `internal/dynamodb/iterator.go`, `internal/goety/goety.go`, `internal/goety/goety_test.go`, `internal/dynamodb/*_test.go`
 
-### Phase 5: Options and API surface
-
-- [ ] Replace `internal/goety/options.go` functional options with a plain `DumpOptions` struct populated by the command.
-- [ ] Remove `QueryFuncOpts`, `WithQueryOptions`, and the six `With*` functions.
-- [ ] Move `--attribute-name` / `--attribute-value` string parsing into `internal/commands/cmd_dump.go`; the service should receive typed maps, not comma-separated strings.
-- [ ] Wire or delete `DumpOptions.Limit` (see Phase 4).
-- [ ] Rename `internal/goety/types.go` to `service.go`; a file named `types.go` holding the service is a smell.
-- **Files affected:** `internal/goety/options.go`, `internal/goety/types.go`, `internal/goety/goety.go`, `internal/commands/cmd_dump.go`
 
 ### Phase 6: Documentation and dev tooling
 
@@ -146,9 +122,21 @@ make test-dump
 make test-purge
 ```
 
+After Phase 5, confirm filter flags fail locally instead of at the DynamoDB boundary, and that a well-formed filter still round-trips:
+
+```bash
+make build
+# must error with a local parse message, not a DynamoDB ValidationException
+./goety dump -e "$DYNAMODB_LOCAL_ENDPOINT" -t "$TEST_TABLE_NAME" -p /tmp/dump-filter.json \
+  --filter "#pk = :pk" --attribute-name "#pk"
+# must succeed and produce the same file as before the refactor
+./goety dump -e "$DYNAMODB_LOCAL_ENDPOINT" -t "$TEST_TABLE_NAME" -p /tmp/dump-filter.json \
+  --filter "#pk = :pk" --attribute-name "#pk=pk" --attribute-value ":pk=1"
+```
+
 ## Notes and reminders
 
-- Keep the runner thin. Command-specific flag parsing and option building belong in the commands.
+- Keep the runner thin. Command-specific flag parsing and option building belong in the commands. CLI syntax (`a=1,b=2`, comma lists) never crosses into `internal/goety`; DynamoDB expression syntax stays inside it.
 - Keep the progress callback non-blocking. It should only store a string under a mutex.
 - The service is the only dry-run owner. Do not propagate `dryRun` into the DynamoDB client.
 - The AWS SDK default retryer is sufficient; only `UnprocessedItems` need the manual loop.
