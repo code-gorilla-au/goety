@@ -67,7 +67,7 @@ Global Flags:
 dump will scan all items within a dynamodb table and write the contents to a file
 
 Usage:
-  goety dump -t [TABLE_NAME] [flags]
+  goety dump -t [TABLE_NAME] -p [FILE_PATH] [flags]
 
 Flags:
   -N, --attribute-name string    Filter expression attribute names
@@ -77,7 +77,8 @@ Flags:
   -f, --filter string            Filter expression to apply to the scan operation
   -h, --help                     help for dump
   -l, --limit int32              Limit the number of items returned per scan iteration
-  -P, --path string              file path to save the json output
+  -p, --path string              file path to save the json output
+  -R, --raw-output               Optional flag to output the dynamodb scan without transformation
   -t, --table string             table name
 
 Global Flags:
@@ -146,4 +147,19 @@ goety purge --table <table-name> --partition-key <partition-key> --sort-key <sor
 
 ## Development
 
-See [e2e](docs/e2e.md) doc for testing the binary end to end.
+Developing against the CLI needs a local DynamoDB. `docker-compose.yaml` runs the `amazon/dynamodb-local` image on port 8000, and `cmd/local` is the e2e table setup harness: it creates the test table and seeds it with 1,000 items.
+
+Prerequisites: Go, Docker (with `docker-compose`), and `jq` (used by the e2e assertions). A `.env.local` is loaded by the Makefile for the endpoint, table name, keys, and credentials — run `make setup` to copy `.env.example` if you don't have one.
+
+Key targets:
+
+```bash
+make build        # build the goety binary
+make db-seed      # start local DynamoDB and create/seed the table via cmd/local
+make db-kill      # stop the local DynamoDB container
+make test-dump      # integration: dump the seeded table
+make test-seed      # integration: seed the table from a dump
+make test-purge     # integration: purge the table
+make e2e          # full end-to-end harness: dump, purge, and seed, 1000 items verified
+make ci           # unit tests + lint + vuln scan (the local CI equivalent)
+```
