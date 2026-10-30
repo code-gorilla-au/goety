@@ -58,6 +58,10 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 		Limit:           aws.Int32(defaultBatchSize),
 	}
 
+	if s.dryRun {
+		s.logger.Debug("dry run enabled")
+	}
+
 	for out, err := range ddb.ScanAll(ctx, s.client, input) {
 		if err != nil {
 			return fmt.Errorf("scan items for purge: %w", err)
@@ -68,14 +72,14 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 		}
 
 		if s.dryRun {
-			s.logger.Debug("dry run enabled")
 			prettyPrint(out.Items)
-			return nil
+			continue
 		}
 
 		if _, err = s.client.BatchDeleteItems(ctx, tableName, out.Items); err != nil {
 			return fmt.Errorf("delete items for purge: %w", err)
 		}
+
 		deleted += len(out.Items)
 
 		s.reportProgress(fmt.Sprintf("deleted %d items", deleted))
@@ -232,7 +236,9 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 				return fmt.Errorf("write seed items: %w", err)
 			}
 			itemsLoaded += len(batch)
+
 			s.reportProgress(fmt.Sprintf("seeded %d items", itemsLoaded))
+
 			batch = batch[:0]
 		}
 	}
