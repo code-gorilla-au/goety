@@ -94,9 +94,14 @@ func (d *dumpWriter) WriteItems(items []map[string]types.AttributeValue, rawOutp
 func (d *dumpWriter) Close() error {
 	if !d.closed {
 
-		_, cErr := d.w.Write([]byte("]"))
-		if cErr != nil {
-			return fmt.Errorf("write closing bracket to dump file: %w", cErr)
+		_, err := d.w.Write([]byte("]"))
+		if err != nil {
+			cErr := d.w.Close()
+			if cErr != nil {
+				return errors.Join(err, fmt.Errorf("error closing file: %w", cErr))
+			}
+
+			return fmt.Errorf("write closing bracket to dump file: %w", err)
 		}
 
 		d.closed = true
