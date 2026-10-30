@@ -250,6 +250,37 @@ func TestClient_BatchWriteItems(t *testing.T) {
 			odize.AssertEqual(t, 0, len(output.UnprocessedItems))
 			odize.AssertEqual(t, 0, batchWrite)
 		}).
+		Test("should return context cancelled error when ctx done during unprocessed retry", func(t *testing.T) {
+			cancelCtx, cancel := context.WithCancel(ctx)
+			defer cancel()
+
+			db.BatchWriteItemFunc = func(ctx context.Context, params *dynamodb.BatchWriteItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.BatchWriteItemOutput, error) {
+				cancel()
+
+				return &dynamodb.BatchWriteItemOutput{
+					UnprocessedItems: map[string][]types.WriteRequest{
+						"table": {
+							{
+								PutRequest: &types.PutRequest{
+									Item: map[string]types.AttributeValue{
+										"key": &types.AttributeValueMemberS{Value: "value"},
+									},
+								},
+							},
+						},
+					},
+				}, nil
+			}
+
+			input := []map[string]types.AttributeValue{
+				{"key": &types.AttributeValueMemberS{Value: "value"}},
+			}
+
+			_, err := client.BatchWriteItems(cancelCtx, "table", input)
+			odize.AssertError(t, err)
+			odize.AssertTrue(t, errors.Is(err, context.Canceled))
+			odize.AssertTrue(t, strings.Contains(err.Error(), "batch write items:"))
+		}).
 		Run()
 
 	odize.AssertNoError(t, err)

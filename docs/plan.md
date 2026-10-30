@@ -4,18 +4,18 @@ Principal-engineer review: simplify toward idiomatic Go, critique the design, ti
 
 The baseline is strong: the `iter.Seq2` paginator (`ScanAll`), the functional-options surface for `Dump`, the clean `slog` setup, and strict mock discipline (only the SDK boundary + `FileReadWriter`) are all idiomatic. The weak spots concentrate in one function — `Service.Dump` — plus a small set of communication/design inconsistencies that read as "accidentally complex" rather than "deliberately hard."
 
-Legend for priorities: **P0** = correctness, **P1** = high-leverage readability/design, **P2** = cheap hygiene, **P3** = coverage.
+Legend for priorities: **P0** = correctness (do first), **P1** = high-leverage readability/design, **P2** = cheap hygiene, **Comm** = UX/communication, **P3** = coverage. Items are numbered **§1–§27** in **execution order** by tier (P0 → P1 → P2 → Comm → P3); work them top to bottom. The “Recommended build order” checklist at the bottom is the same items collapsed to one line each, with the same §numbers.
 
 ---
 
 ## P0 — Correctness
 
-### 1. `batchWriteItem` returns the *pre-retry* output — stale `UnprocessedItems`
-`internal/dynamodb/dynamodb.go:86–122`. The initial `BatchWriteItem` (line 95) is captured as `output`; unprocessed items are retried in a loop (114–119) whose exit condition is `len(unprocessedItems) == 0`. But line 122 returns the **original** `output`, so a caller that inspects `resp.UnprocessedItems` after a successful `BatchWriteItems` can see a non-empty map even though the retry drained it. The adapter reports pre-retry state while writes actually completed.
+### 1. `batchWriteItem` returns pre-retry `output` on `ctx.Done()`
+`internal/dynamodb/dynamodb.go:106–107`. Inside the unprocessed-items retry loop, the `ctx.Done()` branch returns the **first** `output` (line 107) rather than `lastProcessedOutput`. After several retries, the first output's `UnprocessedItems` is the largest (stale) set. Fix: return `lastProcessedOutput` instead.
 
-Fix: return the output reflecting the final state (carry the last `BatchWriteItem` result through the return), or restructure so `output` is the result of the final call.
+> **Latent in the current system**: all service-layer callers discard the returned output (`Seed` and `Purge` both use `if _, err := ...`). The stale `UnprocessedItems` is therefore not user-observable today. Reclassify to P2 if you want strict observable-impact tiers; it still merits a regression test (drive `UnprocessedItems` non-empty on the first call, empty on the second, and assert the returned `UnprocessedItems` is empty).
 
-### 2. `openDumpFile` collapses two errors into one
+### 2. `openDumpFile` collapses two errors into one *(error-attribution, not data-loss)*
 `internal/goety/goety.go:272–279`. When the opening-bracket write fails **and** the follow-up `Close()` also fails, only the close error is returned and the root write error is dropped:
 
 ```go
@@ -28,7 +28,7 @@ if _, err = w.Write([]byte("[")); err != nil {
 }
 ```
 
-Fix: `errors.Join(err, cErr)`, or return the write error and annotate the close failure.
+Fix: `errors.Join(err, cErr)`, or return the write error and annotate the close failure. The dump fails either way — this is about which error the user sees, so it's cheap to fix and worth doing, but it's not a data-correctness issue.
 
 ---
 
@@ -68,18 +68,18 @@ func (d *dumpWriter) close() error {
 `Dump` becomes: open → `defer dw.close()` → loop `dw.writeItems(...)` → progress. One extraction removes the closure foot-gun, the duplicate bracket write, and the `first *bool` pointer-threading at once. Do this first among the P1 items.
 
 ### 4. Unify `extractAttrValue` / `convertAVValue` — the M/L recursion is duplicated
-`internal/dynamodb/utils.go:52–190`. Both are a `switch v := value.(type)` over the **same 12 cases**; they differ only in return shape (unwrapped `any` vs. wrapped `AVer`). The nested M (map) and L (list) traversal is copy-pasted between them (65–85 vs. 150–174). Adding a 13th SDK member requires editing **both** in lockstep. Neither has a `default:`, so an unexpected type silently yields `nil` with no error.
+`internal/dynamodb/utils.go:52–190`. Both are a `switch v := value.(type)` over the **same 10 cases** (S, N, B, BOOL, NULL, M, L, SS, NS, BS — the full DynamoDB `AttributeValue` union); they differ only in return shape (unwrapped `any` vs. wrapped `AVer`). The nested M (map) and L (list) traversal is copy-pasted between them (65–85 vs. 150–174). Adding a new SDK member type requires editing **both** in lockstep. Neither has a `default:`, so an unexpected type silently yields `nil` with no error.
 
 Fix options (pick one):
-- **Table-driven**: `map[kind]func(types.AttributeValue) (any, error)` shared by both, each of the 12 cases written once.
-- **Shared recursion helper**: factor the M/L traversal into one helper both call; add a `default` for unknown-type detection.
+- **Table-driven**: `map[kind]func(types.AttributeValue) (any, error)` shared by both, each of the 10 cases written once.
+- **Shared recursion helper**: factor the M/L traversal into one helper both call; add a `default` for unknown-type detection. *Recommended*: lower risk than the table-driven route for a marginal readability gain.
 
 Either halves the maintenance surface and surfaces unknown-type drift.
 
 ### 5. Drop the `AVer` marker interface and the `Marshal → Unmarshal` round-trip
 `internal/dynamodb/types.go`; `internal/goety/goety.go:332–341`.
 
-- `IsAV() bool` is never called; it exists only to make the 12 structs an interface. The field names (`S`/`N`/`BOOL`/`M`/`L`/…) are what make `json.Marshal` emit the raw wire shape (`{"pk":{"S":"pk"}}`), so keep the structs but stop faking polymorphism. `ConvertAVValues` can build JSON-ready output directly.
+- `IsAV() bool` is never called; it exists only to make the 10 structs an interface. The field names (`S`/`N`/`BOOL`/`M`/`L`/…) are what make `json.Marshal` emit the raw wire shape (`{"pk":{"S":"pk"}}`), so keep the structs but stop faking polymorphism. `ConvertAVValues` can build JSON-ready output directly.
 - `transformDumpOutput` does `ConvertAVValues` → `json.Marshal` → `json.Unmarshal` back into `[]map[string]any`. The round-trip exists **only** to erase `AVer → any` to match the non-raw path's typing. But `dryRunResult` is only ever printed via `prettyPrint` — it crosses no boundary requiring a fixed type. Print the AVer slice directly (json handles concrete types) and drop both the Unmarshal and the type-erasure rationale. Fewer allocations, clearer intent.
 
 ### 6. Reconcile `dry run` semantics across commands
@@ -298,55 +298,62 @@ Balance the critique — these are doing the right thing and shouldn't be touche
 
 ---
 
-## Shortlist in priority order (one-glance version)
+## Recommended build order (one-glance checklist)
 
-**P0 — correctness**
-1. `batchWriteItem` returns pre-retry `output` → stale `UnprocessedItems`. (`dynamodb.go:86–122`)
-2. `openDumpFile` drops the write error when close also fails. (`goety.go:272–279`)
+> **How to read this.** Every item has exactly one number — a body section, §1–§27 — assigned in execution order by tier. Work down the list top to bottom: **P0 → P1 → P2 → Comm → P3**, and within a tier, in listed order. So "what is one?" = §1, the first item in the list, a P0 correctness fix (`batchWriteItem`). "In what order?" = the tier order above, then items top to bottom within each tier. Each line below is a body item collapsed to one sentence; follow the § to the full analysis and code evidence.
+
+**P0 — correctness** *(do first)*
+- §1. `batchWriteItem` returns pre-retry `output` on `ctx.Done()` → stale `UnprocessedItems`. (`dynamodb.go:106–107`) *Latent today — all service callers discard the returned output (`if _, err := ...`); demote to P2 if you want strict observable-impact tiers, but still add a regression test.*
+- §2. `openDumpFile` drops the write error when close also fails. (`goety.go:272–279`) *Error-attribution, not data-loss — the dump fails either way; this is which error the user sees.*
 
 **P1 — design & top simplifications**
-3. Extract a `dumpWriter` type from `Dump` — collapses `first`, `closed`, the deferred-close closure (writes to the named `err`), the manual `]`, and the duplicate bracket write. *Highest-leverage change.*
-4. DRY `extractAttrValue` / `convertAVValue` — duplicated M/L recursion; factor a shared core; add a `default` for unknown types.
-5. Drop the `AVer` marker interface (nothing calls `IsAV`) and the `transformDumpOutput` `Marshal → Unmarshal` round-trip.
-6. Reconcile `dry run` semantics — Purge previews first page only; Dump/Seed preview all. Make consistent or document deliberately.
-7. Fix the inverted verbose feedback — verbose removes the spinner and adds per-item debug + `file:line`. Keep progress visible in both modes; deroute per-item logs to per-batch summaries; de-dupe the "dump complete" progress+log.
-8. Co-locate the `Service` type with its methods (split across `service.go` and `goety.go`).
+- §3. Extract a `dumpWriter` type from `Dump` — collapses `first`, `closed`, the deferred-close closure (writes to the named `err`), the manual `]`, and the duplicate bracket write. *Highest-leverage change.*
+- §4. DRY `extractAttrValue` / `convertAVValue` — duplicated M/L recursion (10 cases each); factor a shared M/L helper; add a `default` for unknown types. *Recommended route; the table-driven alternative is riskier for marginal gain.*
+- §5. Drop the `AVer` marker interface (nothing calls `IsAV`) and the `transformDumpOutput` `Marshal → Unmarshal` round-trip. *Verify `--raw-output` consumers before touching — the wire shape `{"S":...}` may be a downstream contract.*
+- §6. Reconcile `dry run` semantics — Purge previews first page only; Dump/Seed preview all. Make consistent or document deliberately. *At minimum: document (cheap, non-breaking). Full reconciliation = behavior change → product sign-off.*
+- §7. Co-locate the `Service` type with its methods (split across `service.go` and `goety.go`). *Low priority — layout, not behavior. Bundle with the `dumpWriter` extraction (touches the same file) or skip.*
+- §8. Name `defaultBatchSize` for what it means and expose the scan-page == batch-max coupling. *The one-line comment capturing the invariant is 90% of the value; the rename is optional polish.*
 
 **P2 — cheap hygiene**
-9. Three copy-paste doc comments naming the wrong function/command.
-10. Rename `internal/goety/writer.go` → `file.go`; rename the `OSFile` receiver `w` → `f`.
-11. Add `var _ FileReadWriter = (*OSFile)(nil)` next to the `DynamoClient` assertion.
-12. Remove the stray `fmt.Println("creating file", filename)` in the dump test.
-13. `cmd/local/main.go`: unreachable `return` after `os.Exit`, "seeing"→"seeding" typo, "seed complete" logged on error.
-14. `JSONStringify`: fall back to `fmt.Sprint(v)` on error instead of `""`.
-15. Rename `defaultBatchSize` → `maxBatchWrite` (or split) and make the scan-page == batch-max coupling explicit.
+- §9. Fix three copy-paste doc comments naming the wrong function/command.
+- §10. Rename `internal/goety/writer.go` → `file.go`; rename the `OSFile` receiver `w` → `f`.
+- §11. Add `var _ FileReadWriter = (*OSFile)(nil)` next to the `DynamoClient` assertion.
+- §12. Remove the stray `fmt.Println("creating file", filename)` in the dump test.
+- §13. `cmd/local/main.go`: unreachable `return` after `os.Exit`, "seeing"→"seeding" typo, "seed complete" logged on error.
+- §14. `JSONStringify`: fall back to `fmt.Sprint(v)` on error instead of `""`.
 
-**P3 — coverage additions (order: value/cost)**
-16. Dump: multi-item (≥2) **and** multi-page (≥2 non-empty) test — pins the comma between items and across pages (`first`'s cross-page persistence is never exercised today).
-17. Dump: extend `mockWriteCloser` with `closeErr` (mirror `mockReadCloser`), then assert the `"close dump file:"` path (currently dead-from-tests because `Close()` is hardcoded `nil`).
-18. Dump: isolate a **mid-dump write** failure (page 1 ok, page 2 write errors) — distinct from the existing open-phase and scan failures; assert the `]` is appended by the deferred close.
-19. Seed: empty `[]` → no-op, no error (pins the AGENTS.md "empty input" case).
-20. Seed: valid-JSON-not-array (e.g., object) → `"expected JSON array"`.
-21. Seed: close-failure via `mockReadCloser{closeErr: ...}` → assert `"close seed file:"` (simulatable but untested).
-22. Seed: mid-decode failure → deferred close succeeds; the surfaced error is the decode one (exercises the `err == nil` guard in the close path).
-23. Purge: assert the **exact key set** passed to `BatchDeleteItems` (pins keys-only projection → delete).
-24. Purge: multi-page non-dry purge (walk past the first page) → assert combined key set + call count; optionally add a deliberate assertion pinning the dry-run first-page-only preview (regression anchor for §6).
+**Comm — progress vs. debug (UX)**
+- §15. The verbose flag inverts user feedback — verbose removes the spinner (no progress) and adds per-item debug + `file:line`. Keep progress visible in both modes.
+- §16. Deroute per-item adapter debug to per-batch summaries.
+- §17. De-duplicate the `Dump` completion signal (progress + log fire the same event).
+- §18. Hoist `Debug("dry run enabled")` out of the loops; reword for effect.
+
+**P3 — test coverage**
+- §19. Dump: multi-item (≥2) **and** multi-page (≥2 non-empty) test — pins the comma between items and across pages (`first`'s cross-page persistence is never exercised today).
+- §20. Dump: isolate a **mid-dump write** failure (page 1 ok, page 2 errors) — distinct from the existing open-phase and scan failures; assert the `]` is appended by the deferred close.
+- §21. Dump: extend `mockWriteCloser` with `closeErr` (mirror `mockReadCloser`), then assert the `"close dump file:"` path (currently dead-from-tests because `Close()` is hardcoded `nil`).
+- §22. Seed: empty `[]` → no-op, no error (pins the AGENTS.md "empty input" case).
+- §23. Seed: valid JSON that is *not* an array → "expected JSON array".
+- §24. Seed: close-file error — simulatable but untested; assert "close seed file:"
+- §25. Purge: assert the *actual key set* passed to `BatchDeleteItems` (pins keys-only projection → delete).
+- §26. Purge: multi-page non-dry purge (walk past the first page) → assert combined key set + call count.
+- §27. Seed: mid-decode failure still closes the file (deferred close); surfaced error is the decode one.
 
 ---
 
 ## Execution notes
 
-- Each P1 item is a self-contained vertical slice (test + change + doc note). Prefer landing #3 (the `dumpWriter`) first — it unblocks the cleanest home for the new dump coverage items (#16–18) because the tests then assert on the type's behavior rather than on the tangled named-return/closure.
+- Each P1 item is a self-contained vertical slice (test + change + doc note). Prefer landing §3 (the `dumpWriter`) first — it unblocks the cleanest home for the new dump coverage items (§19–§21) because the tests then assert on the type's behavior rather than on the tangled named-return/closure.
 - The P0 items are independent of the P1 refactor; either order is fine, but land P0 first if you want a quick confidence win before the larger structural change.
-- When touching `dynamodb.go` for the `batchWriteItem` fix, also consider adding a test in `dynamodb_test.go` that drives an unprocessed-retry (the mock `ddbClient` can return non-empty `UnprocessedItems` on the first call, empty on the second) and assert the returned `UnprocessedItems` is empty — that's the direct regression test for P0 #1.
-- The `AVer` removal (#5) is the riskiest of the "keep-it-idiomatic" items because the wire shape (`{"pk":{"S":"pk"}}`) is user-visible via `--raw-output`. If you drop the interface, keep the struct field names exactly (`S`, `N`, `B`, `BOOL`, `NULL`, `M`, `L`, `SS`, `NS`, `BS`) so `json.Marshal`'s output is unchanged. A `dump --raw-output` e2e assertion (there's already a `test-dump` target) would pin this.
-- No new dependencies introduced by any of the above. The `errors.Join` use in #2/#14 requires Go 1.20+, and `go.mod` declares 1.27.3, so it's fine.
+- When touching `dynamodb.go` for the `batchWriteItem` fix, also consider adding a test in `dynamodb_test.go` that drives an unprocessed-retry (the mock `ddbClient` can return non-empty `UnprocessedItems` on the first call, empty on the second) and assert the returned `UnprocessedItems` is empty — that's the direct regression test for P0 §1.
+- The `AVer` removal (§5) is the riskiest of the "keep-it-idiomatic" items because the wire shape (`{"pk":{"S":"pk"}}`) is user-visible via `--raw-output`. If you drop the interface, keep the struct field names exactly (`S`, `N`, `B`, `BOOL`, `NULL`, `M`, `L`, `SS`, `NS`, `BS`) so `json.Marshal`'s output is unchanged. A `dump --raw-output` e2e assertion (there's already a `test-dump` target) would pin this.
+- No new dependencies introduced by any of the above. The `errors.Join` use in §2/§14 requires Go 1.20+, and `go.mod` declares 1.27.3, so it's fine.
 - If you land the `dumpWriter` extraction, the `writeDumpItems` and `transformDumpOutput` helpers become private methods or standalone functions on the new type — the `first *bool` parameter disappears entirely (it's a field now), which is the single clearest "before/after" readability win in this whole review.
 
 ## Follow-up questions (open, not blocking)
 
-- Is the `--raw-output` wire shape part of any downstream contract (i.e., do consumers parse the dumped JSON and rely on the `{"S": ...}` shape)? If yes, treat it as semi-public and be conservative in #5.
-- Should the `dry run` inconsistency (#6) be resolved by making **all** commands preview-all (more intuitive) or by documenting **Purge's** first-page-only as a deliberate "peek" mode (less change, more docs)? I lean toward "all preview-all" for symmetry, but it's a product call.
+- Is the `--raw-output` wire shape part of any downstream contract (i.e., do consumers parse the dumped JSON and rely on the `{"S": ...}` shape)? If yes, treat it as semi-public and be conservative in §5.
+- Should the `dry run` inconsistency (§6) be resolved by making **all** commands preview-all (more intuitive) or by documenting **Purge's** first-page-only as a deliberate "peek" mode (less change, more docs)? I lean toward "all preview-all" for symmetry, but it's a product call.
 - The `AVer` structs duplicate the AWS SDK's own `types.AttributeValue` hierarchy. If the SDK ever adds a member type, you'd need to mirror it here. Is there appetite for a small codegen or a build-time assertion (e.g., a test that the set of handled `AttributeValueMember*` types matches the SDK's known set) to catch drift? Low priority, but worth a line in the tooling plan if it comes up.
 
 ## What I did *not* change (and why)

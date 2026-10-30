@@ -104,7 +104,7 @@ func (c *Client) batchWriteItem(ctx context.Context, tableName string, requests 
 	for len(unprocessedItems) > 0 {
 		select {
 		case <-ctx.Done():
-			return output, fmt.Errorf("batch %s items: %w", op, ctx.Err())
+			return lastProcessedOutput, fmt.Errorf("batch %s items: %w", op, ctx.Err())
 		case <-time.After(backoff):
 		}
 
