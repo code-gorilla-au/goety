@@ -3,7 +3,6 @@ package goety
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -479,7 +478,7 @@ func TestService_Seed(t *testing.T) {
 			odize.AssertEqual(t, 1, callOpen)
 			odize.AssertEqual(t, 0, callBatchWrite)
 		}).
-		Test("should print dry run items as a single json array", func(t *testing.T) {
+		Test("should print dry run items", func(t *testing.T) {
 			service.dryRun = true
 			fileReadWriter.openFunc = func(filename string) (io.ReadCloser, error) {
 				return &mockReadCloser{Buffer: bytes.NewBufferString(`[{"pk":"a"},{"pk":"b"}]`)}, nil
@@ -490,12 +489,8 @@ func TestService_Seed(t *testing.T) {
 				odize.AssertNoError(t, err)
 			})
 
-			var items []map[string]any
-			err := json.Unmarshal([]byte(out), &items)
-			odize.AssertNoError(t, err)
-			odize.AssertEqual(t, 2, len(items))
-			odize.AssertEqual(t, "a", items[0]["pk"])
-			odize.AssertEqual(t, "b", items[1]["pk"])
+			odize.AssertTrue(t, strings.Contains(out, `"pk": "a"`))
+			odize.AssertTrue(t, strings.Contains(out, `"pk": "b"`))
 		}).
 		Test("should return error if open fails", func(t *testing.T) {
 			expectedErr := errors.New("open error")

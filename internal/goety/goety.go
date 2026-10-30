@@ -215,7 +215,7 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 		}
 
 		if s.dryRun {
-			dryRunItems = append(dryRunItems, item)
+			prettyPrint(item)
 			itemsLoaded++
 			continue
 		}
