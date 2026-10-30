@@ -219,7 +219,6 @@ func TestService_Dump(t *testing.T) {
 
 		fileReadWriter = mockFileReadWriter{
 			createFunc: func(filename string, perm fs.FileMode) (io.WriteCloser, error) {
-				fmt.Println("creating file", filename)
 				callWriteFile++
 				return &mockWriteCloser{}, nil
 			},
@@ -335,7 +334,6 @@ func TestService_Dump(t *testing.T) {
 			}
 
 			err := service.Dump(ctx, "my-table", "path")
-			fmt.Println(err.Error())
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
 		}).
 		Test("should return error if writing items fails", func(t *testing.T) {
