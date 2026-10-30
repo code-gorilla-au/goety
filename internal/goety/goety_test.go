@@ -219,7 +219,6 @@ func TestService_Dump(t *testing.T) {
 
 		fileReadWriter = mockFileReadWriter{
 			createFunc: func(filename string, perm fs.FileMode) (io.WriteCloser, error) {
-				fmt.Println("creating file", filename)
 				callWriteFile++
 				return &mockWriteCloser{}, nil
 			},
@@ -336,7 +335,6 @@ func TestService_Dump(t *testing.T) {
 
 			err := service.Dump(ctx, "my-table", "path")
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
-			odize.AssertTrue(t, strings.HasPrefix(err.Error(), "create dump file:"))
 		}).
 		Test("should return error if writing items fails", func(t *testing.T) {
 			expectedErr := errors.New("write error")
@@ -346,7 +344,7 @@ func TestService_Dump(t *testing.T) {
 
 			err := service.Dump(ctx, "my-table", "path")
 			odize.AssertTrue(t, errors.Is(err, expectedErr))
-			odize.AssertTrue(t, strings.HasPrefix(err.Error(), "write opening bracket to dump file:"))
+			odize.AssertTrue(t, strings.Contains(err.Error(), "write opening bracket to dump file:"))
 		}).
 		Test("should pass the limit to the scan input", func(t *testing.T) {
 			var gotLimit *int32

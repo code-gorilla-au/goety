@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"time"
 
@@ -103,29 +102,23 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 	dumpOpts := WithDumpOptions(opts)
 
 	itemsScanned := 0
-	var dryRunResult []map[string]any
 
-	var w io.WriteCloser
-	closed := false
-	closeDumpFile := func() {
-		if !closed {
-			_, _ = w.Write([]byte("]"))
-		}
-
-		if cerr := w.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("close dump file: %w", cerr)
-		}
-	}
+	frw := dumpWriter{}
 
 	if !s.dryRun {
-		w, err = s.openDumpFile(path)
+		err = frw.Init(s.fileReaderWriter, path)
 		if err != nil {
-			return err
+			return fmt.Errorf("open dump file: %w", err)
 		}
-		defer closeDumpFile()
+
+		defer func() {
+			dErr := frw.Close()
+			if dErr != nil {
+				err = errors.Join(err, dErr)
+			}
+		}()
 	}
 
-	first := true
 	scanInput := &dynamodb.ScanInput{
 		TableName:                 &tableName,
 		ProjectionExpression:      dumpOpts.ProjectedExpressions,
@@ -149,9 +142,11 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 			if transformErr != nil {
 				return fmt.Errorf("transform dump items: %w", transformErr)
 			}
-			dryRunResult = append(dryRunResult, items...)
+
+			prettyPrint(items)
+
 		} else {
-			if err = writeDumpItems(w, output.Items, dumpOpts.RawOutput, &first); err != nil {
+			if err = frw.WriteItems(output.Items, dumpOpts.RawOutput); err != nil {
 				return fmt.Errorf("write dump items: %w", err)
 			}
 		}
@@ -160,20 +155,9 @@ func (s Service) Dump(ctx context.Context, tableName string, path string, opts .
 		s.reportProgress(fmt.Sprintf("scanned %d items", itemsScanned))
 	}
 
-	if s.dryRun {
-		s.logger.Debug("dry run enabled")
-		prettyPrint(dryRunResult)
-		return nil
-	}
-
-	closed = true
-	if _, err = w.Write([]byte("]")); err != nil {
-		return fmt.Errorf("write closing bracket to dump file: %w", err)
-	}
-
 	s.reportProgress(fmt.Sprintf("dump complete, saved %d items to %s", itemsScanned, path))
-	s.logger.Info("dump complete", "items", itemsScanned)
-	return nil
+
+	return
 }
 
 // Seed a table with items from a json file
@@ -263,56 +247,6 @@ func prettyPrint(v any) {
 	}
 
 	fmt.Println(string(data))
-}
-
-func (s Service) openDumpFile(path string) (io.WriteCloser, error) {
-	w, err := s.fileReaderWriter.Create(path, 0644)
-	if err != nil {
-		return nil, fmt.Errorf("create dump file: %w", err)
-	}
-
-	if _, err = w.Write([]byte("[")); err != nil {
-		cErr := w.Close()
-		if cErr != nil {
-			return nil, errors.Join(err, fmt.Errorf("error closing file: %w", cErr))
-		}
-
-		return nil, fmt.Errorf("write opening bracket to dump file: %w", err)
-	}
-
-	return w, nil
-}
-
-func writeDumpItems(w io.Writer, items []map[string]types.AttributeValue, rawOutput bool, first *bool) error {
-	for _, item := range items {
-		var v any
-		var err error
-		if rawOutput {
-			v, err = ddb.ConvertAVValue(item)
-		} else {
-			v, err = ddb.FlattenAttrValue(item)
-		}
-		if err != nil {
-			return err
-		}
-
-		data, err := json.Marshal(v)
-		if err != nil {
-			return err
-		}
-
-		if !*first {
-			if _, err = w.Write([]byte(",")); err != nil {
-				return err
-			}
-		}
-		*first = false
-
-		if _, err = w.Write(data); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func transformDumpOutput(attrData []map[string]types.AttributeValue, rawOutput bool) ([]map[string]any, error) {
