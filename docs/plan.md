@@ -10,11 +10,6 @@ Legend for priorities: **P0** = correctness (do first), **P1** = high-leverage r
 
 ## P0 — Correctness
 
-### 1. `batchWriteItem` returns pre-retry `output` on `ctx.Done()`
-`internal/dynamodb/dynamodb.go:106–107`. Inside the unprocessed-items retry loop, the `ctx.Done()` branch returns the **first** `output` (line 107) rather than `lastProcessedOutput`. After several retries, the first output's `UnprocessedItems` is the largest (stale) set. Fix: return `lastProcessedOutput` instead.
-
-> **Latent in the current system**: all service-layer callers discard the returned output (`Seed` and `Purge` both use `if _, err := ...`). The stale `UnprocessedItems` is therefore not user-observable today. Reclassify to P2 if you want strict observable-impact tiers; it still merits a regression test (drive `UnprocessedItems` non-empty on the first call, empty on the second, and assert the returned `UnprocessedItems` is empty).
-
 ### 2. `openDumpFile` collapses two errors into one *(error-attribution, not data-loss)*
 `internal/goety/goety.go:272–279`. When the opening-bracket write fails **and** the follow-up `Close()` also fails, only the close error is returned and the root write error is dropped:
 
