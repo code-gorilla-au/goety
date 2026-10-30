@@ -217,6 +217,18 @@ func TestClient_BatchWriteItems(t *testing.T) {
 
 			odize.AssertEqual(t, 2, batchWrite)
 		}).
+		Test("should return last processed output", func(t *testing.T) {
+			input := []map[string]types.AttributeValue{
+				{
+					"key": &types.AttributeValueMemberS{Value: "value"},
+				},
+			}
+			output, err := client.BatchWriteItems(ctx, "table", input)
+			odize.AssertNoError(t, err)
+
+			odize.AssertEqual(t, 2, batchWrite)
+			odize.AssertEqual(t, 0, len(output.UnprocessedItems))
+		}).
 		Test("should return error on db error", func(t *testing.T) {
 			db.BatchWriteItemFunc = func(ctx context.Context, params *dynamodb.BatchWriteItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.BatchWriteItemOutput, error) {
 				return &dynamodb.BatchWriteItemOutput{}, errors.ErrUnsupported

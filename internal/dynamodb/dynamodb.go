@@ -98,6 +98,7 @@ func (c *Client) batchWriteItem(ctx context.Context, tableName string, requests 
 	}
 
 	unprocessedItems := output.UnprocessedItems
+	lastProcessedOutput := output
 
 	backoff := c.backoff
 	for len(unprocessedItems) > 0 {
@@ -111,13 +112,14 @@ func (c *Client) batchWriteItem(ctx context.Context, tableName string, requests 
 
 		unprocessedInput := ddb.BatchWriteItemInput{RequestItems: unprocessedItems}
 
-		unprocessedOutput, uErr := c.db.BatchWriteItem(ctx, &unprocessedInput)
+		var uErr error
+		lastProcessedOutput, uErr = c.db.BatchWriteItem(ctx, &unprocessedInput)
 		if uErr != nil {
-			return unprocessedOutput, fmt.Errorf("batch %s items: %w", op, uErr)
+			return lastProcessedOutput, fmt.Errorf("batch %s items: %w", op, uErr)
 		}
 
-		unprocessedItems = unprocessedOutput.UnprocessedItems
+		unprocessedItems = lastProcessedOutput.UnprocessedItems
 	}
 
-	return output, nil
+	return lastProcessedOutput, nil
 }
