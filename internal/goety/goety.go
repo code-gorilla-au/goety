@@ -3,6 +3,7 @@ package goety
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -58,6 +59,10 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 		Limit:           aws.Int32(defaultBatchSize),
 	}
 
+	if s.dryRun {
+		s.logger.Debug("dry run enabled")
+	}
+
 	for out, err := range ddb.ScanAll(ctx, s.client, input) {
 		if err != nil {
 			return fmt.Errorf("scan items for purge: %w", err)
@@ -68,14 +73,14 @@ func (s Service) Purge(ctx context.Context, tableName string, keys TableKeys) er
 		}
 
 		if s.dryRun {
-			s.logger.Debug("dry run enabled")
 			prettyPrint(out.Items)
-			return nil
+			continue
 		}
 
 		if _, err = s.client.BatchDeleteItems(ctx, tableName, out.Items); err != nil {
 			return fmt.Errorf("delete items for purge: %w", err)
 		}
+
 		deleted += len(out.Items)
 
 		s.reportProgress(fmt.Sprintf("deleted %d items", deleted))
@@ -205,7 +210,6 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 	}
 
 	itemsLoaded := 0
-	var dryRunItems []map[string]any
 	batch := make([]map[string]types.AttributeValue, 0, defaultBatchSize)
 
 	for dec.More() {
@@ -215,7 +219,7 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 		}
 
 		if s.dryRun {
-			dryRunItems = append(dryRunItems, item)
+			prettyPrint(item)
 			itemsLoaded++
 			continue
 		}
@@ -233,13 +237,11 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 				return fmt.Errorf("write seed items: %w", err)
 			}
 			itemsLoaded += len(batch)
+
 			s.reportProgress(fmt.Sprintf("seeded %d items", itemsLoaded))
+
 			batch = batch[:0]
 		}
-	}
-
-	if s.dryRun {
-		prettyPrint(dryRunItems)
 	}
 
 	if !s.dryRun && len(batch) > 0 {
@@ -272,7 +274,7 @@ func (s Service) openDumpFile(path string) (io.WriteCloser, error) {
 	if _, err = w.Write([]byte("[")); err != nil {
 		cErr := w.Close()
 		if cErr != nil {
-			return nil, fmt.Errorf("error closing: %w", cErr)
+			return nil, errors.Join(err, fmt.Errorf("error closing file: %w", cErr))
 		}
 
 		return nil, fmt.Errorf("write opening bracket to dump file: %w", err)
