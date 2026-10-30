@@ -6,24 +6,6 @@ The baseline is strong: the `iter.Seq2` paginator (`ScanAll`), the functional-op
 
 Legend for priorities: **P0** = correctness (do first), **P1** = high-leverage readability/design, **P2** = cheap hygiene, **Comm** = UX/communication, **P3** = coverage. Items are numbered **§1–§27** in **execution order** by tier (P0 → P1 → P2 → Comm → P3); work them top to bottom. The “Recommended build order” checklist at the bottom is the same items collapsed to one line each, with the same §numbers.
 
----
-
-## P0 — Correctness
-
-### 2. `openDumpFile` collapses two errors into one *(error-attribution, not data-loss)*
-`internal/goety/goety.go:272–279`. When the opening-bracket write fails **and** the follow-up `Close()` also fails, only the close error is returned and the root write error is dropped:
-
-```go
-if _, err = w.Write([]byte("[")); err != nil {
-    cErr := w.Close()
-    if cErr != nil {
-        return nil, fmt.Errorf("error closing: %w", cErr) // original `err` lost here
-    }
-    return nil, fmt.Errorf("write opening bracket to dump file: %w", err)
-}
-```
-
-Fix: `errors.Join(err, cErr)`, or return the write error and annotate the close failure. The dump fails either way — this is about which error the user sees, so it's cheap to fix and worth doing, but it's not a data-correctness issue.
 
 ---
 
