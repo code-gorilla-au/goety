@@ -3,6 +3,7 @@ package goety
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -273,7 +274,7 @@ func (s Service) openDumpFile(path string) (io.WriteCloser, error) {
 	if _, err = w.Write([]byte("[")); err != nil {
 		cErr := w.Close()
 		if cErr != nil {
-			return nil, fmt.Errorf("error closing: %w", cErr)
+			return nil, errors.Join(err, fmt.Errorf("error closing file: %w", cErr))
 		}
 
 		return nil, fmt.Errorf("write opening bracket to dump file: %w", err)
