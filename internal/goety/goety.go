@@ -205,7 +205,6 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 	}
 
 	itemsLoaded := 0
-	var dryRunItems []map[string]any
 	batch := make([]map[string]types.AttributeValue, 0, defaultBatchSize)
 
 	for dec.More() {
@@ -236,10 +235,6 @@ func (s Service) Seed(ctx context.Context, tableName string, filePath string) (e
 			s.reportProgress(fmt.Sprintf("seeded %d items", itemsLoaded))
 			batch = batch[:0]
 		}
-	}
-
-	if s.dryRun {
-		prettyPrint(dryRunItems)
 	}
 
 	if !s.dryRun && len(batch) > 0 {
