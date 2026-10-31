@@ -122,8 +122,8 @@ func extractAttrValue(value types.AttributeValue) (any, error) {
 	return returnVal, nil
 }
 
-func ConvertAVValues(data []map[string]types.AttributeValue) ([]map[string]AVer, error) {
-	transformed := []map[string]AVer{}
+func ConvertAVValues(data []map[string]types.AttributeValue) ([]map[string]any, error) {
+	transformed := []map[string]any{}
 
 	for _, item := range data {
 		transformedItem, err := ConvertAVValue(item)
@@ -137,8 +137,8 @@ func ConvertAVValues(data []map[string]types.AttributeValue) ([]map[string]AVer,
 	return transformed, nil
 }
 
-func ConvertAVValue(data map[string]types.AttributeValue) (map[string]AVer, error) {
-	transformed := map[string]AVer{}
+func ConvertAVValue(data map[string]types.AttributeValue) (map[string]any, error) {
+	transformed := map[string]any{}
 
 	for key, value := range data {
 		transformedValue, err := convertAVValue(value)
@@ -152,8 +152,8 @@ func ConvertAVValue(data map[string]types.AttributeValue) (map[string]AVer, erro
 	return transformed, nil
 }
 
-func convertAVValue(value types.AttributeValue) (AVer, error) {
-	var returnVal AVer
+func convertAVValue(value types.AttributeValue) (any, error) {
+	var returnVal any
 	switch v := value.(type) {
 	case *types.AttributeValueMemberS:
 		returnVal = AVString{

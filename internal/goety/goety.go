@@ -250,31 +250,8 @@ func prettyPrint(v any) {
 }
 
 func transformDumpOutput(attrData []map[string]types.AttributeValue, rawOutput bool) ([]map[string]any, error) {
-	out := []map[string]any{}
-
-	if !rawOutput {
-		items, transformErr := ddb.FlattenAttrList(attrData)
-		if transformErr != nil {
-			return out, transformErr
-		}
-		out = append(out, items...)
-		return out, nil
+	if rawOutput {
+		return ddb.ConvertAVValues(attrData)
 	}
-
-	items, err := ddb.ConvertAVValues(attrData)
-	if err != nil {
-		return out, err
-	}
-
-	data, err := json.Marshal(items)
-	if err != nil {
-		return out, err
-	}
-
-	err = json.Unmarshal(data, &out)
-	if err != nil {
-		return out, err
-	}
-
-	return out, nil
+	return ddb.FlattenAttrList(attrData)
 }
