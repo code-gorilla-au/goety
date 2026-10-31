@@ -29,6 +29,7 @@ go.work
 
 test.json
 fixed-agreements.json
+.gocache
 
 .idea
 e2e*.json
