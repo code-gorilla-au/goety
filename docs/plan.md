@@ -11,12 +11,6 @@ Legend for priorities: **P0** = correctness (do first), **P1** = high-leverage r
 
 ## P1 — Design & simplification (highest-leverage)
 
-### 5. Drop the `AVer` marker interface and the `Marshal → Unmarshal` round-trip
-`internal/dynamodb/types.go`; `internal/goety/goety.go:332–341`.
-
-- `IsAV() bool` is never called; it exists only to make the 10 structs an interface. The field names (`S`/`N`/`BOOL`/`M`/`L`/…) are what make `json.Marshal` emit the raw wire shape (`{"pk":{"S":"pk"}}`), so keep the structs but stop faking polymorphism. `ConvertAVValues` can build JSON-ready output directly.
-- `transformDumpOutput` does `ConvertAVValues` → `json.Marshal` → `json.Unmarshal` back into `[]map[string]any`. The round-trip exists **only** to erase `AVer → any` to match the non-raw path's typing. But `dryRunResult` is only ever printed via `prettyPrint` — it crosses no boundary requiring a fixed type. Print the AVer slice directly (json handles concrete types) and drop both the Unmarshal and the type-erasure rationale. Fewer allocations, clearer intent.
-
 ### 6. Reconcile `dry run` semantics across commands
 `slogger`— the service. One flag, three meanings:
 
