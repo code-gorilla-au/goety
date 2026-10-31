@@ -122,6 +122,13 @@ func seedTable(db *dynamodb.Client, config Config, items int) error {
 			Item: map[string]types.AttributeValue{
 				config.TablePrimaryKey: &types.AttributeValueMemberS{Value: fmt.Sprintf("pk#%d", i)},
 				config.TableSortKey:    &types.AttributeValueMemberS{Value: fmt.Sprintf("sk#%d", i)},
+				"dk": &types.AttributeValueMemberM{
+					Value: map[string]types.AttributeValue{
+						"ek": &types.AttributeValueMemberS{
+							Value: "fk",
+						},
+					},
+				},
 			},
 		})
 		if err != nil {

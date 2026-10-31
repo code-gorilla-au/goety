@@ -3,6 +3,7 @@ package goety
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	ddb "github.com/code-gorilla-au/goety/internal/dynamodb"
 	"github.com/code-gorilla-au/goety/internal/logging"
 	"github.com/code-gorilla-au/odize"
 )
@@ -284,6 +286,32 @@ func TestService_Dump(t *testing.T) {
 			odize.AssertEqual(t, 1, callScanAll)
 			odize.AssertEqual(t, 1, callWriteFile)
 			odize.AssertEqual(t, `[{"pk":{"S":"pk"},"sk":{"S":"sk"}}]`, buf.String())
+		}).
+		Test("should keep the raw AVer structs on a raw dry-run transform", func(t *testing.T) {
+			attrData := []map[string]types.AttributeValue{
+				{
+					"pk": &types.AttributeValueMemberS{Value: "pk"},
+					"sk": &types.AttributeValueMemberS{Value: "sk"},
+				},
+			}
+
+			items, err := transformDumpOutput(attrData, true)
+			odize.AssertNoError(t, err)
+
+			// The raw AVer structs must survive the transform — a JSON round-trip
+			// would flatten them into plain maps.
+			pk, ok := items[0]["pk"].(ddb.AVString)
+			odize.AssertTrue(t, ok)
+			odize.AssertEqual(t, "pk", pk.S)
+
+			sk, ok := items[0]["sk"].(ddb.AVString)
+			odize.AssertTrue(t, ok)
+			odize.AssertEqual(t, "sk", sk.S)
+
+			// The wire shape stays unchanged.
+			wire, err := json.Marshal(items)
+			odize.AssertNoError(t, err)
+			odize.AssertEqual(t, `[{"pk":{"S":"pk"},"sk":{"S":"sk"}}]`, string(wire))
 		}).
 		Test("should return error if scan fails", func(t *testing.T) {
 			expectedErr := errors.New("scan all error")

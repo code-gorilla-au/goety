@@ -11,54 +11,6 @@ Legend for priorities: **P0** = correctness (do first), **P1** = high-leverage r
 
 ## P1 — Design & simplification (highest-leverage)
 
-### 3. Extract a `dumpWriter` type from `Service.Dump` (top simplification)
-`internal/goety/goety.go:95–172`. This 78-line method carries five intertwined mechanisms:
-
-- a `first *bool` threaded **by pointer** into `writeDumpItems` for comma placement across pages (123, 149);
-- a `closed bool` + a **closure `closeDumpFile`** that captures the *named return `err`* and writes to it (103–113);
-- a `defer closeDumpFile()` registered **only in the non-dryRun branch** (120);
-- a **manual** `closed = true; w.Write("]")` in the success path (164–167), duplicating the bracket write the deferred closure also performs.
-
-The deferred close and the manual path both write `]`; the only thing preventing a double write is `closed`, which the manual path sets first. Correct today, but a reader must trace the closure's captured `err`, the two `closed` writers, `first`'s cross-page persistence, and the defer-vs-manual interplay.
-
-The closure-over-named-return is the fragility: `closeDumpFile` only avoids clobbering a prior scan/write error because of the `err == nil` guard (line 111). Drop the guard in a future edit and the close error silently overwrites the real error during unwind. Extracting the type removes this class rather than guarding it.
-
-Proposed shape:
-
-```go
-type dumpWriter struct {
-    w      io.WriteCloser
-    first   bool
-    closed  bool
-}
-
-func (d *dumpWriter) writeItems(items []map[string]types.AttributeValue, raw bool) error { /* comma + marshal */ }
-func (d *dumpWriter) close() error {
-    if !d.closed {
-        _, _ = d.w.Write([]byte("]"))
-        d.closed = true
-    }
-    return d.w.Close()
-}
-```
-
-`Dump` becomes: open → `defer dw.close()` → loop `dw.writeItems(...)` → progress. One extraction removes the closure foot-gun, the duplicate bracket write, and the `first *bool` pointer-threading at once. Do this first among the P1 items.
-
-### 4. Unify `extractAttrValue` / `convertAVValue` — the M/L recursion is duplicated
-`internal/dynamodb/utils.go:52–190`. Both are a `switch v := value.(type)` over the **same 10 cases** (S, N, B, BOOL, NULL, M, L, SS, NS, BS — the full DynamoDB `AttributeValue` union); they differ only in return shape (unwrapped `any` vs. wrapped `AVer`). The nested M (map) and L (list) traversal is copy-pasted between them (65–85 vs. 150–174). Adding a new SDK member type requires editing **both** in lockstep. Neither has a `default:`, so an unexpected type silently yields `nil` with no error.
-
-Fix options (pick one):
-- **Table-driven**: `map[kind]func(types.AttributeValue) (any, error)` shared by both, each of the 10 cases written once.
-- **Shared recursion helper**: factor the M/L traversal into one helper both call; add a `default` for unknown-type detection. *Recommended*: lower risk than the table-driven route for a marginal readability gain.
-
-Either halves the maintenance surface and surfaces unknown-type drift.
-
-### 5. Drop the `AVer` marker interface and the `Marshal → Unmarshal` round-trip
-`internal/dynamodb/types.go`; `internal/goety/goety.go:332–341`.
-
-- `IsAV() bool` is never called; it exists only to make the 10 structs an interface. The field names (`S`/`N`/`BOOL`/`M`/`L`/…) are what make `json.Marshal` emit the raw wire shape (`{"pk":{"S":"pk"}}`), so keep the structs but stop faking polymorphism. `ConvertAVValues` can build JSON-ready output directly.
-- `transformDumpOutput` does `ConvertAVValues` → `json.Marshal` → `json.Unmarshal` back into `[]map[string]any`. The round-trip exists **only** to erase `AVer → any` to match the non-raw path's typing. But `dryRunResult` is only ever printed via `prettyPrint` — it crosses no boundary requiring a fixed type. Print the AVer slice directly (json handles concrete types) and drop both the Unmarshal and the type-erasure rationale. Fewer allocations, clearer intent.
-
 ### 6. Reconcile `dry run` semantics across commands
 `slogger`— the service. One flag, three meanings:
 
